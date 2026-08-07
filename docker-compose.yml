@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: drhga-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-drhga}
+      POSTGRES_USER: ${POSTGRES_USER:-drhga}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-drhga}
+    ports:
+      - "5432:5432"
+    volumes:
+      - drhga_postgres:/var/lib/postgresql/data
+      - ./server/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-drhga} -d ${POSTGRES_DB:-drhga}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./server
+    container_name: drhga-api
+    restart: unless-stopped
+    environment:
+      PORT: ${API_PORT:-4000}
+      DATABASE_URL: ${DATABASE_URL:-postgres://drhga:drhga@postgres:5432/drhga}
+      JWT_SECRET: ${JWT_SECRET:-cambia-este-secreto-en-produccion}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    ports:
+      - "${API_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
+    container_name: drhga-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-4173}:4173"
+    depends_on:
+      - api
+
+volumes:
+  drhga_postgres:

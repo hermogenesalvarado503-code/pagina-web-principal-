@@ -1,0 +1,8 @@
+.teacher-shell{min-height:100vh;background:#fffaf0}
+.teacher-header{background:#b45309;color:white;padding:1rem 1.25rem;font-weight:700;font-size:clamp(1rem,2vw,1.2rem)}
+.teacher-main{padding:1.25rem;overflow-x:auto}
+
+@media (max-width: 640px){
+  .teacher-header{padding:0.9rem 0.95rem;font-size:1rem}
+  .teacher-main{padding:0.95rem}
+}

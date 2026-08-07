@@ -1,0 +1,8 @@
+.student-shell{min-height:100vh;background:#f3f6ff}
+.student-header{background:#2563eb;color:white;padding:1rem 1.25rem;font-weight:700;font-size:clamp(1rem,2vw,1.2rem)}
+.student-main{padding:1.25rem;overflow-x:auto}
+
+@media (max-width: 640px){
+  .student-header{padding:0.9rem 0.95rem;font-size:1rem}
+  .student-main{padding:0.95rem}
+}

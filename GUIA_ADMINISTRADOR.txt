@@ -1,0 +1,59 @@
+GUIA DEL ADMINISTRADOR - SITIO WEB DRHGA
+=========================================
+
+PROPOSITO
+El panel de administracion permite mantener el contenido visible en el sitio
+publico. Solo debe utilizarse con una cuenta cuyo rol sea "admin".
+
+INGRESO SEGURO
+1. Entre por la direccion privada del portal definida por la institucion.
+2. Inicie sesion con el correo y contrasena de administrador.
+3. Verifique que aparezca el panel de Administracion.
+4. Al finalizar, presione "Salir".
+
+No comparta la cuenta administradora. Debe crearse una cuenta individual para
+cada persona responsable. En produccion se recomienda activar doble factor y
+cambiar las credenciales de prueba antes de publicar el sistema.
+
+SECCIONES DEL PANEL
+
+Dashboard
+- Muestra un resumen de galeria, resenas y noticias.
+- Incluye accesos para crear una foto o una noticia nueva.
+
+Galeria
+- Agregar foto nueva: escriba titulo, descripcion, URL de imagen y orden.
+- Editar: actualiza los datos de una imagen existente.
+- Eliminar: borra el registro de la galeria. Confirme que sea la imagen
+  correcta antes de usarlo.
+- El campo orden controla la posicion de la foto en la galeria publica.
+
+Noticias
+- Agregar noticia nueva: crea una publicacion o evento.
+- Editar: permite cambiar titulo, encabezado de noticia, descripcion, imagen,
+  ubicacion, fecha, hora y mapa opcional.
+- Eliminar: elimina la publicacion seleccionada.
+- Use una imagen con URL valida y verifique en el sitio publico que se vea.
+- La fecha se registra como AAAA-MM-DD y la hora como HH:MM.
+
+Resenas
+- Muestra las resenas publicadas.
+- Recargar resenas actualiza la lista.
+- Eliminar borra una resena. Esta operacion no tiene papelera en la aplicacion;
+  antes de hacerlo confirme que corresponde a contenido inapropiado.
+
+Usuarios
+- Actualmente es una seccion informativa. La gestion completa de altas,
+  bajas, roles y restablecimiento de contrasenas requiere una ampliacion del
+  sistema y debe realizarla personal tecnico.
+
+MENSAJES Y PUBLICACION
+Revise los mensajes recibidos y los datos antes de eliminar registros. Revise
+ortografia, fecha, hora y ubicacion antes de guardar una noticia. No publique
+datos de menores sin autorizacion institucional. Mantenga una copia externa de
+las imagenes y publicaciones importantes.
+
+SOPORTE
+Solicite apoyo si no puede iniciar sesion, una imagen no carga, los datos no
+se guardan, aparece "No autorizado", o necesita crear o modificar cuentas.
+Indique la accion realizada y el error observado; nunca envie contrasenas.

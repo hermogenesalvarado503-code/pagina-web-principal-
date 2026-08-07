@@ -1,0 +1,142 @@
+DOCUMENTACION TECNICA - SITIO WEB DRHGA
+=======================================
+
+1. ARQUITECTURA
+El proyecto tiene un frontend React (sitio publico y paneles por rol), una API
+en Node.js y una base de datos PostgreSQL. Docker Compose ejecuta los tres
+servicios: web, api y postgres.
+
+El sitio publico incluye Inicio, Nosotros, Servicios, Galeria, Noticias y
+Contacto. Los paneles privados son para admin, teacher, student y user. Ocultar
+el enlace de acceso no protege las rutas: la API valida sesion y rol antes de
+permitir operaciones privadas.
+
+2. LENGUAJES Y TECNOLOGIAS
+- JavaScript ES Modules: codigo del frontend y backend.
+- React 19 y React DOM: interfaz por componentes.
+- Vite 8: desarrollo y compilacion del frontend.
+- CSS: estilos y diseno responsivo.
+- Node.js 22: plataforma del servidor.
+- Modulo http nativo de Node.js: servidor y rutas de la API.
+- pg: conexion de Node.js con PostgreSQL.
+- PostgreSQL 16: base de datos.
+- GSAP: animaciones de la interfaz publica.
+- Phaser: dependencia disponible para funciones interactivas.
+- ESLint: revision estatica de codigo.
+- Docker y Docker Compose: contenedores y ejecucion integrada.
+
+3. ESTRUCTURA DEL FRONTEND (/src)
+- main.jsx: punto de entrada; monta React en el elemento root de index.html.
+- App.jsx: componente principal. Controla idioma, pagina activa, menu, sesion,
+  galeria, eventos, resenas, mensajes y llamadas a la API.
+- App.css: estilos globales de la aplicacion publica, formularios, tarjetas,
+  footer, controles y reglas responsivas.
+- index.css: estilos base globales, como desplazamiento suave y reglas para
+  enlaces e imagenes.
+- layouts/RoleHeader.jsx: encabezado reutilizable de vistas por rol.
+- pages/public/: componentes de acceso publico.
+  Inicio.jsx, Nosotros.jsx, Servicios.jsx, Galeria.jsx, Noticias.jsx y
+  Contacto.jsx representan las secciones publicas.
+  PageLayout.jsx reutiliza estructura de pagina.
+  content.js centraliza textos y traducciones en espanol e ingles.
+- pages/admin/: zona administrativa.
+  AdminDashboard.jsx carga y administra galeria, noticias y resenas usando
+  la API. AdminLayout.jsx crea menu lateral y area de trabajo. admin.css
+  contiene los estilos exclusivos del administrador.
+- pages/student/ y pages/teacher/: paneles y estilos propios de estudiante y
+  docente.
+- assets/: recursos importados directamente por React.
+
+4. OTROS DIRECTORIOS Y ARCHIVOS
+- public/: archivos estaticos. public/img contiene logos y fotografias; se
+  usan como /img/nombre-del-archivo.
+- dist/: resultado de "npm run build". No se edita manualmente.
+- index.html: pagina HTML base de Vite.
+- package.json: dependencias y scripts del frontend.
+- vite.config.js: configuracion de Vite.
+- eslint.config.js: reglas de ESLint.
+- .env: variables de entorno y secretos; no debe subirse a Git.
+- Dockerfile: construye el contenedor web.
+- docker-compose.yml: coordina web, api y PostgreSQL.
+
+5. BACKEND (/server)
+- server/src/server.js: servidor HTTP, rutas, autenticacion, autorizacion,
+  consultas SQL y migracion inicial.
+- server/db/init.sql: crea las tablas y carga datos semilla.
+- server/package.json: dependencias y comandos del backend.
+- server/Dockerfile: imagen Docker de la API.
+
+Tablas actuales: users, messages, reviews, gallery_items y events.
+
+6. LOGICA DE AUTENTICACION
+POST /api/auth/login valida correo y contrasena. Las contrasenas se derivan
+con PBKDF2, sal y 120000 iteraciones. La API firma un JWT HMAC SHA-256 y lo
+guarda en la cookie HTTP-only drhga_session, con duracion de 8 horas.
+
+GET /api/me devuelve el usuario autenticado. RoleShell en App.jsx consulta
+esta ruta al abrir /admin, /student o /teacher y solo muestra el panel que
+corresponde al rol. El backend vuelve a validar permisos: requireAuth protege
+rutas privadas y requireAdmin protege operaciones administrativas.
+
+7. RUTAS PRINCIPALES DE LA API
+- POST /api/auth/login y POST /api/auth/logout.
+- GET /api/me.
+- GET, POST, PUT y DELETE /api/gallery (escritura: admin).
+- GET, POST, PUT y DELETE /api/events (escritura: admin).
+- GET, POST y DELETE /api/reviews (eliminar: admin).
+- POST /api/messages; GET y DELETE /api/messages (admin).
+- GET /api/me/messages (usuario autenticado).
+- GET /api/health y GET /api-docs.
+
+La raiz de la API ofrece Swagger UI. Los roles definidos son admin, user,
+student y teacher.
+
+8. DOCKER
+docker-compose.yml declara:
+- postgres: postgres:16-alpine, volumen drhga_postgres e inicializacion desde
+  server/db/init.sql.
+- api: se construye desde server/Dockerfile y escucha en el puerto 4000.
+- web: se construye desde el Dockerfile raiz, compila React y ejecuta Vite
+  Preview en el puerto 4173 interno.
+
+Comando de arranque:
+  docker compose up -d --build
+
+Comandos utiles:
+  docker compose ps
+  docker compose logs -f api
+  docker compose down
+
+Variables: POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, DATABASE_URL,
+JWT_SECRET, CORS_ORIGIN, API_PORT, WEB_PORT y VITE_API_URL. Los puertos por
+defecto del compose actual son 4173 para web y 4000 para la API.
+
+9. EJECUCION LOCAL
+Frontend:
+  npm install
+  npm run dev
+  npm run build
+  npm run lint
+
+Backend, desde /server:
+  npm install
+  npm run dev
+
+Se necesita una base PostgreSQL accesible mediante DATABASE_URL. En Windows,
+si PowerShell bloquea npm.ps1, use: npm.cmd run build
+
+10. SEGURIDAD Y PRODUCCION
+- Cambiar JWT_SECRET, contrasenas de base de datos y cuentas de prueba.
+- No publicar .env ni CREDENCIALES_ADMIN.txt.
+- Usar HTTPS y agregar el atributo Secure a la cookie en produccion.
+- Configurar CORS_ORIGIN con el dominio exacto; no usar *.
+- Implementar limite de intentos de login, auditoria, respaldos, recuperacion
+  segura de contrasena y doble factor para administradores.
+- El formulario de acceso puede ir en /acceso o portal.dominio.edu.sv y no
+  aparecer en el sitio publico, pero esto complementa, no sustituye, la
+  autorizacion de la API.
+
+11. MANTENIMIENTO
+Antes de actualizar, respalde la base de datos. Pruebe build/lint, revise los
+logs y verifique la pagina publica, login, permisos por rol, noticias,
+galeria, resenas y cierre de sesion.

@@ -1,0 +1,49 @@
+GUIA DE USO - PORTAL PRIVADO DR. HERMOGENES ALVARADO
+=======================================================
+
+OBJETIVO
+Esta guia esta dirigida a estudiantes, docentes y usuarios autorizados. El
+sitio publico muestra la informacion del centro escolar; el portal privado se
+utiliza para acceder a funciones personales.
+
+ACCESO AL PORTAL
+1. Solicite al centro escolar la direccion del portal privado y sus
+   credenciales personales.
+2. Abra la direccion en un navegador actualizado.
+3. Escriba su correo institucional y contrasena.
+4. Presione "Ingresar". El sistema identifica el rol y abre el panel
+   correspondiente.
+
+La direccion del portal no debe publicarse en los menus del sitio publico.
+Sin embargo, la seguridad real depende de las credenciales y de la validacion
+del servidor; no comparta su usuario, contrasena ni sesion con otras personas.
+
+FUNCIONES DISPONIBLES
+- Estudiante: consulta su panel y los mensajes vinculados a su cuenta.
+- Docente: consulta su panel y los mensajes vinculados a su cuenta.
+- Usuario: consulta su perfil y los mensajes vinculados a su cuenta.
+- Administrador: administra el contenido, segun la guia del administrador.
+
+MENSAJES Y CONTACTO
+El formulario Contacto del sitio publico permite enviar consultas. Si envio el
+mensaje con una sesion iniciada, este puede asociarse a su cuenta. Escriba
+datos correctos y no incluya informacion sensible innecesaria.
+
+CERRAR SESION
+Al terminar, use el boton "Salir". Es especialmente importante hacerlo si
+usa una computadora compartida. Cerrar la pestana no reemplaza el cierre de
+sesion.
+
+BUENAS PRACTICAS DE SEGURIDAD
+- Use una contrasena larga, unica y privada.
+- No reutilice la contrasena institucional en otros sitios.
+- No guarde contrasenas en equipos publicos.
+- Si sospecha que alguien conoce su contrasena, informe al administrador para
+  que la cambie.
+- Si ve una pantalla de "No autorizado", vuelva a iniciar sesion o contacte
+  al centro escolar. No intente acceder con cuentas ajenas.
+
+SOPORTE
+Para problemas de acceso, contacte al personal autorizado del Centro Escolar
+e indique su nombre, correo institucional y el mensaje de error. No envie su
+contrasena por correo, WhatsApp ni capturas de pantalla.
