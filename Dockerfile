@@ -7,8 +7,7 @@ RUN npm install
 
 COPY . .
 
-ARG VITE_API_URL=http://localhost:4000
-ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_API_PROXY_TARGET=http://api:4000
 
 RUN npm run build
 

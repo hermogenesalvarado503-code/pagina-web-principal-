@@ -6,11 +6,12 @@ const demoReviews = [
   { name: 'Juan Rodríguez', role: 'Padre de familia', rating: 5, comment: 'La disciplina es firme, pero justa, y el ambiente es sano.' },
 ]
 
-export default function Nosotros({ t, reviews, onReview }) {
+export default function Nosotros({ t, reviews, session, onReview, onDeleteReview }) {
   const [showAllReviews, setShowAllReviews] = useState(false)
   const allReviews = [...reviews, ...demoReviews]
   const visibleReviews = showAllReviews ? allReviews : allReviews.slice(0, 3)
   const hasMoreReviews = allReviews.length > visibleReviews.length
+  const currentUserEmail = session?.user?.email?.toLowerCase?.() ?? ''
 
   return (
     <Page title={t.pages.aboutTitle} intro={t.pages.aboutIntro}>
@@ -33,16 +34,26 @@ export default function Nosotros({ t, reviews, onReview }) {
           <h2>Lo que dicen padres y estudiantes</h2>
         </div>
         <div className="reviews-grid">
-          {visibleReviews.map((review, index) => (
-            <article className="review-card" data-reveal key={`${review.name}-${index}`}>
-              <div className="stars">{'*'.repeat(review.rating)}{'-'.repeat(5 - review.rating)}</div>
-              <p>{review.comment}</p>
-              <div className="review-author">
-                <strong>{review.name}</strong>
-                <small>{review.role}</small>
-              </div>
-            </article>
-          ))}
+          {visibleReviews.map((review, index) => {
+            const isOwner = !!review.email && currentUserEmail && review.email.toLowerCase() === currentUserEmail
+            const canDelete = !!session?.user && (session.user.role === 'admin' || isOwner)
+
+            return (
+              <article className="review-card" data-reveal key={`${review.name}-${index}`}>
+                <div className="stars">{'*'.repeat(review.rating)}{'-'.repeat(5 - review.rating)}</div>
+                <p>{review.comment}</p>
+                <div className="review-author">
+                  <strong>{review.name}</strong>
+                  <small>{review.role}</small>
+                </div>
+                {canDelete && (
+                  <button className="btn danger" type="button" onClick={() => onDeleteReview?.(review.id)}>
+                    Eliminar
+                  </button>
+                )}
+              </article>
+            )
+          })}
         </div><br></br>
         {hasMoreReviews && (
           <div className="reviews-footer">

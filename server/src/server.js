@@ -126,6 +126,44 @@ function requireAdmin(req, res) {
   return user
 }
 
+async function seedAnalyticsData() {
+  const existing = await pool.query('SELECT COUNT(*)::int AS total FROM page_views')
+  if (Number(existing.rows[0].total) > 0) return
+
+  const routes = ['/', '/nosotros', '/servicios', '/galeria', '/noticias', '/contacto']
+  const browsers = ['Chrome', 'Safari', 'Firefox', 'Edge']
+  const devices = ['Desktop', 'Mobile', 'Tablet']
+  const operatingSystems = ['Windows', 'macOS', 'Android', 'iOS']
+  const referrers = ['Directo', 'Google', 'Facebook', 'Instagram', 'WhatsApp']
+  const rows = []
+
+  for (let index = 0; index < 260; index += 1) {
+    const createdAt = new Date(Date.now() - ((index % 180) * 24 * 60 * 60 * 1000) - ((index % 12) * 60 * 60 * 1000))
+    const route = routes[index % routes.length]
+    const browser = browsers[index % browsers.length]
+    const device = devices[index % devices.length]
+    const os = operatingSystems[(index + 2) % operatingSystems.length]
+    const referrer = referrers[index % referrers.length]
+    rows.push([
+      route,
+      referrer === 'Directo' ? '' : referrer,
+      `Mozilla/5.0 (${os}; ${device}) ${browser}/1.0`,
+      browser,
+      os,
+      device,
+      createdAt.toISOString(),
+    ])
+  }
+
+  const placeholders = rows.map((_, index) => `($${index * 7 + 1}, $${index * 7 + 2}, $${index * 7 + 3}, $${index * 7 + 4}, $${index * 7 + 5}, $${index * 7 + 6}, $${index * 7 + 7})`).join(', ')
+  const flatRows = rows.flat()
+
+  await pool.query(`
+    INSERT INTO page_views (path, referrer, user_agent, browser, os, device, created_at)
+    VALUES ${placeholders}
+  `, flatRows)
+}
+
 async function migrate() {
   await pool.query(`
     DO $$
@@ -195,7 +233,20 @@ async function migrate() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS page_views (
+      id SERIAL PRIMARY KEY,
+      path TEXT NOT NULL,
+      referrer TEXT,
+      user_agent TEXT,
+      browser TEXT,
+      os TEXT,
+      device TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `)
+
+  await seedAnalyticsData()
 
   await pool.query(`
     INSERT INTO users (name, email, role, password_salt, password_hash)
@@ -292,6 +343,130 @@ async function upsertEvent(req, res, id = null) {
     )
 
   return json(req, res, id ? 200 : 201, result.rows[0])
+}
+
+async function getAnalyticsData() {
+  const summary = await pool.query(`
+    SELECT
+      COUNT(*)::int AS total_visits,
+      COUNT(DISTINCT DATE(created_at))::int AS active_days
+    FROM page_views
+  `)
+
+  const topPage = await pool.query(`
+    SELECT path, COUNT(*)::int AS visits
+    FROM page_views
+    GROUP BY path
+    ORDER BY visits DESC, path ASC
+    LIMIT 1
+  `)
+
+  const totalMobile = await pool.query(`
+    SELECT COALESCE(ROUND((COUNT(*) * 100.0) / NULLIF((SELECT COUNT(*) FROM page_views), 0), 0), 0)::int AS mobile_share
+    FROM page_views
+    WHERE device = 'Mobile'
+  `)
+
+  const monthlyTrend = await pool.query(`
+    SELECT
+      to_char(date_trunc('month', created_at), 'Mon') AS month,
+      COUNT(*)::int AS visits
+    FROM page_views
+    WHERE created_at >= NOW() - INTERVAL '6 months'
+    GROUP BY date_trunc('month', created_at)
+    ORDER BY date_trunc('month', created_at)
+  `)
+
+  const dailyTraffic = await pool.query(`
+    SELECT
+      CASE EXTRACT(DOW FROM created_at)
+        WHEN 0 THEN 'Dom'
+        WHEN 1 THEN 'Lun'
+        WHEN 2 THEN 'Mar'
+        WHEN 3 THEN 'Mié'
+        WHEN 4 THEN 'Jue'
+        WHEN 5 THEN 'Vie'
+        ELSE 'Sáb'
+      END AS label,
+      COUNT(*)::int AS value
+    FROM page_views
+    WHERE created_at >= NOW() - INTERVAL '7 days'
+    GROUP BY EXTRACT(DOW FROM created_at)
+    ORDER BY EXTRACT(DOW FROM created_at)
+  `)
+
+  const hourlyTraffic = await pool.query(`
+    SELECT
+      LPAD(EXTRACT(HOUR FROM created_at)::int::text, 2, '0') || ':00' AS hour,
+      COUNT(*)::int AS value
+    FROM page_views
+    WHERE created_at >= NOW() - INTERVAL '24 hours'
+    GROUP BY EXTRACT(HOUR FROM created_at)
+    ORDER BY EXTRACT(HOUR FROM created_at)
+  `)
+
+  const deviceStats = await pool.query(`
+    SELECT
+      device AS label,
+      ROUND((COUNT(*) * 100.0) / NULLIF((SELECT COUNT(*) FROM page_views), 0), 0)::int AS value
+    FROM page_views
+    GROUP BY device
+    ORDER BY value DESC
+  `)
+
+  const topPages = await pool.query(`
+    SELECT path AS label, COUNT(*)::int AS value
+    FROM page_views
+    GROUP BY path
+    ORDER BY value DESC, label ASC
+    LIMIT 5
+  `)
+
+  const trafficSources = await pool.query(`
+    SELECT
+      COALESCE(NULLIF(referrer, ''), 'Directo') AS name,
+      ROUND((COUNT(*) * 100.0) / NULLIF((SELECT COUNT(*) FROM page_views), 0), 0)::int AS share
+    FROM page_views
+    GROUP BY referrer
+    ORDER BY share DESC
+    LIMIT 4
+  `)
+
+  return {
+    summary: {
+      totalVisits: Number(summary.rows[0]?.total_visits || 0),
+      activeDays: Number(summary.rows[0]?.active_days || 0),
+      topPage: topPage.rows[0]?.path || 'Sin datos',
+      topPageVisits: Number(topPage.rows[0]?.visits || 0),
+      mobileShare: Number(totalMobile.rows[0]?.mobile_share || 0),
+    },
+    monthlyTrend: monthlyTrend.rows.map((row) => ({
+      month: row.month,
+      visits: Number(row.visits || 0),
+      trend: Number(row.visits || 0),
+    })),
+    dailyTraffic: dailyTraffic.rows.map((row) => ({
+      label: row.label,
+      value: Number(row.value || 0),
+    })),
+    hourlyTraffic: hourlyTraffic.rows.map((row) => ({
+      hour: row.hour,
+      value: Number(row.value || 0),
+    })),
+    deviceStats: deviceStats.rows.map((row) => ({
+      label: row.label,
+      value: Number(row.value || 0),
+      color: row.label === 'Mobile' ? '#10b981' : row.label === 'Desktop' ? '#3b82f6' : '#f59e0b',
+    })),
+    topPages: topPages.rows.map((row) => ({
+      label: row.label,
+      value: Number(row.value || 0),
+    })),
+    trafficSources: trafficSources.rows.map((row) => ({
+      name: row.name,
+      share: Number(row.share || 0),
+    })),
+  }
 }
 
 async function router(req, res) {
@@ -431,14 +606,51 @@ async function router(req, res) {
       return json(req, res, 200, { ok: true })
     }
 
+    if (req.method === 'POST' && path === '/api/analytics/page-view') {
+      const body = await readBody(req)
+      const normalizedPath = String(body.path || '/').trim() || '/'
+      const browser = String(body.browser || '').trim() || 'Other'
+      const os = String(body.os || '').trim() || 'Other'
+      const device = String(body.device || '').trim() || 'Desktop'
+      const userAgent = String(body.userAgent || '').trim() || ''
+      const referrer = String(body.referrer || '').trim()
+
+      await pool.query(
+        'INSERT INTO page_views (path, referrer, user_agent, browser, os, device, created_at) VALUES ($1, $2, $3, $4, $5, $6, NOW())',
+        [normalizedPath, referrer, userAgent, browser, os, device],
+      )
+
+      return json(req, res, 201, { ok: true })
+    }
+
+    if (req.method === 'GET' && path === '/api/analytics') {
+      const analytics = await getAnalyticsData()
+      return json(req, res, 200, analytics)
+    }
+
     if (req.method === 'GET' && path === '/api/reviews') {
-      const result = await pool.query('SELECT id, name, role, rating, comment, created_at FROM reviews WHERE approved = TRUE ORDER BY created_at DESC')
+      const result = await pool.query('SELECT id, name, email, role, rating, comment, created_at FROM reviews WHERE approved = TRUE ORDER BY created_at DESC')
       return json(req, res, 200, result.rows)
     }
 
     if (req.method === 'DELETE' && path.startsWith('/api/reviews/')) {
-      if (!requireAdmin(req, res)) return
-      await pool.query('DELETE FROM reviews WHERE id = $1', [idFromPath(path)])
+      const auth = getAuth(req)
+      const reviewId = idFromPath(path)
+      const reviewResult = await pool.query('SELECT email FROM reviews WHERE id = $1', [reviewId])
+      const review = reviewResult.rows[0]
+
+      if (!auth) {
+        return json(req, res, 403, { error: 'No autorizado' })
+      }
+
+      const isAdmin = auth.role === 'admin'
+      const isOwner = !!review && !!auth.email && String(review.email).toLowerCase() === String(auth.email).toLowerCase()
+
+      if (!isAdmin && !isOwner) {
+        return json(req, res, 403, { error: 'No puedes eliminar esta reseña' })
+      }
+
+      await pool.query('DELETE FROM reviews WHERE id = $1', [reviewId])
       return json(req, res, 200, { ok: true })
     }
 
@@ -454,9 +666,10 @@ async function router(req, res) {
     if (req.method === 'POST' && path === '/api/messages') {
       const body = await readBody(req)
       const auth = getAuth(req)
+      const category = String(body.category || 'consulta-general')
       const result = await pool.query(
         'INSERT INTO messages (user_id, name, email, phone, subject, category, message) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-        [auth?.sub || null, body.name, body.email, body.phone || '', body.subject, body.category || 'inquiry', body.message],
+        [auth?.sub || null, body.name, body.email, body.phone || '', body.subject, category, body.message],
       )
       return json(req, res, 201, result.rows[0])
     }

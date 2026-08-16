@@ -37,8 +37,6 @@ services:
   web:
     build:
       context: .
-      args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
     container_name: drhga-web
     restart: unless-stopped
     ports:

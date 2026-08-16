@@ -10,11 +10,11 @@ export default function Contacto({ t, onSubmit }) {
           <input name="email" type="email" placeholder={t.forms.email} required />
           <input name="phone" placeholder={t.forms.phone} maxLength="8" />
           <input name="subject" placeholder={t.forms.subject} required />
-          <select name="category" defaultValue="inquiry">
-            <option value="admissions">Admisiones</option>
-            <option value="inquiry">Consulta general</option>
-            <option value="complaint">Queja</option>
-            <option value="other">Otro</option>
+          <select name="category" defaultValue="consulta-general">
+            <option value="admisiones">Admisiones</option>
+            <option value="consulta-general">Consulta general</option>
+            <option value="queja">Queja</option>
+            <option value="otro">Otro</option>
           </select>
           <textarea name="message" placeholder={t.forms.message} required />
           <button className="btn primary" type="submit">{t.forms.send}</button>

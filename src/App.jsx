@@ -16,7 +16,7 @@ import { buildPublicTranslations } from './pages/public/content'
 
 gsap.registerPlugin(ScrollTrigger)
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+const API_URL = import.meta.env.VITE_API_URL || ''
 const SESSION_STORAGE_KEY = 'drhga-session'
 
 const fallbackGallery = [
@@ -42,6 +42,15 @@ const fallbackEvents = [
 const copy = {
   es: buildPublicTranslations('es'),
   en: buildPublicTranslations('en'),
+}
+
+const publicRouteMap = {
+  inicio: '/',
+  nosotros: '/nosotros',
+  servicios: '/servicios',
+  galeria: '/galeria',
+  noticias: '/noticias',
+  contacto: '/contacto',
 }
 
 const services = [
@@ -73,12 +82,12 @@ function App() {
 
   const t = copy[lang]
   const pages = useMemo(() => [
-    { id: 'inicio', label: t.nav.inicio },
-    { id: 'nosotros', label: t.nav.nosotros },
-    { id: 'servicios', label: t.nav.servicios },
-    { id: 'galeria', label: t.nav.galeria },
-    { id: 'noticias', label: t.nav.noticias },
-    { id: 'contacto', label: t.nav.contacto },
+    { id: 'inicio', label: t.nav.inicio, icon: '⌂' },
+    { id: 'nosotros', label: t.nav.nosotros, icon: '◌' },
+    { id: 'servicios', label: t.nav.servicios, icon: '✦' },
+    { id: 'galeria', label: t.nav.galeria, icon: '▧' },
+    { id: 'noticias', label: t.nav.noticias, icon: '✧' },
+    { id: 'contacto', label: t.nav.contacto, icon: '✉' },
   ], [t])
 
   function changeLang(nextLang) {
@@ -96,6 +105,51 @@ function App() {
     if (galleryResult.status === 'fulfilled') setGallery(galleryResult.value)
     if (eventsResult.status === 'fulfilled') setEvents(eventsResult.value)
   }
+
+  function detectBrowser(userAgent) {
+    if (/EdgA?\//i.test(userAgent)) return 'Edge'
+    if (/Chrome\//i.test(userAgent) && !/OPR\//i.test(userAgent)) return 'Chrome'
+    if (/Firefox\//i.test(userAgent)) return 'Firefox'
+    if (/Safari\//i.test(userAgent)) return 'Safari'
+    return 'Other'
+  }
+
+  function detectOS(userAgent) {
+    if (/Windows/i.test(userAgent)) return 'Windows'
+    if (/Macintosh|Mac OS X/i.test(userAgent)) return 'macOS'
+    if (/Android/i.test(userAgent)) return 'Android'
+    if (/iPhone|iPad|iPod/i.test(userAgent)) return 'iOS'
+    return 'Other'
+  }
+
+  function detectDevice(userAgent) {
+    if (/iPhone|iPod/i.test(userAgent)) return 'Mobile'
+    if (/iPad/i.test(userAgent)) return 'Tablet'
+    if (/Android/i.test(userAgent)) return 'Mobile'
+    if (/Windows|Macintosh|Linux/i.test(userAgent)) return 'Desktop'
+    return 'Desktop'
+  }
+
+  useEffect(() => {
+    const currentPath = publicRouteMap[page] || '/'
+    if (!currentPath || currentPath === '/admin' || currentPath === '/login' || currentPath === '/portal') return
+
+    const payload = {
+      path: currentPath,
+      referrer: document.referrer || '',
+      userAgent: navigator.userAgent,
+      browser: detectBrowser(navigator.userAgent),
+      os: detectOS(navigator.userAgent),
+      device: detectDevice(navigator.userAgent),
+    }
+
+    fetch(`${API_URL}/api/analytics/page-view`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {})
+  }, [page])
 
   useEffect(() => {
     loadPublicData()
@@ -157,6 +211,14 @@ function App() {
   }, [session])
 
   function goTo(nextPage) {
+    if (nextPage === 'admin' || nextPage === 'dashboard') {
+      window.location.assign(nextPage === 'admin' ? '/admin' : '/portal')
+      return
+    }
+    if (nextPage === 'login') {
+      window.location.assign('/login')
+      return
+    }
     setPage(nextPage)
     setMenuOpen(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -220,7 +282,7 @@ function App() {
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ user: data.user }))
       setDashboardTab(defaultTabForRole(data.user.role))
       if (data.user.role === 'admin') {
-        setPage('admin')
+        goTo('admin')
       } else {
         setPage('dashboard')
       }
@@ -252,6 +314,10 @@ function App() {
     try { localStorage.removeItem(SESSION_STORAGE_KEY) } catch (e) {}
     setSession(null)
     setMessages([])
+    if (window.location.pathname.startsWith('/admin') || window.location.pathname.startsWith('/portal')) {
+      window.location.assign('/')
+      return
+    }
     setPage('inicio')
   }
 
@@ -314,12 +380,11 @@ function App() {
 
     useEffect(() => {
       let mounted = true
-      const controller = new AbortController()
       async function validate() {
-        if (!path.startsWith('/admin') && !path.startsWith('/student') && !path.startsWith('/teacher')) return
+        if (!path.startsWith('/admin') && !path.startsWith('/portal') && !path.startsWith('/student') && !path.startsWith('/teacher')) return
         setState({ loading: true, ok: null, user: null })
         try {
-          const res = await fetch(`${API_URL}/api/me`, { credentials: 'include', signal: controller.signal })
+          const res = await fetch(`${API_URL}/api/me`, { credentials: 'include' })
           if (!mounted) return
           if (!res.ok) {
             if (res.status === 401) {
@@ -333,14 +398,15 @@ function App() {
           setState({ loading: false, ok: true, user: data.user })
         } catch (e) {
           if (!mounted) return
+          if (String(e?.name || '').toLowerCase() === 'aborterror') return
           setState({ loading: false, ok: false, user: null })
         }
       }
       validate()
-      return () => { mounted = false; controller.abort() }
+      return () => { mounted = false }
     }, [path])
 
-    if (!path.startsWith('/admin') && !path.startsWith('/student') && !path.startsWith('/teacher')) return null
+    if (!path.startsWith('/admin') && !path.startsWith('/portal') && !path.startsWith('/student') && !path.startsWith('/teacher')) return null
 
     if (state.loading) return <div style={{ padding: 24 }}>Validando sesión...</div>
     if (!state.ok) return (
@@ -358,6 +424,37 @@ function App() {
         </div>
       )
       return <AdminDashboard />
+    }
+    if (path.startsWith('/portal')) {
+      if (state.user.role === 'admin') {
+        window.location.replace('/admin')
+        return null
+      }
+      return (
+        <div className="private-portal">
+          <header className="private-portal-header">
+            <div><strong>Portal privado</strong><small>{state.user.name}</small></div>
+            <button type="button" onClick={logout}>Salir</button>
+          </header>
+          <Dashboard
+            t={t}
+            session={{ user: state.user }}
+            messages={messages}
+            reviews={reviews}
+            gallery={gallery}
+            events={events}
+            tab={dashboardTab}
+            setTab={setDashboardTab}
+            goTo={goTo}
+            onDeleteMessage={deleteMessage}
+            onSaveGallery={saveGalleryItem}
+            onDeleteGallery={deleteGalleryItem}
+            onSaveEvent={saveEvent}
+            onDeleteEvent={deleteEvent}
+            onDeleteReview={deleteReview}
+          />
+        </div>
+      )
     }
     if (path.startsWith('/student')) {
       if (state.user.role !== 'student') return (
@@ -383,6 +480,15 @@ function App() {
   const rolePage = RoleShell()
   if (rolePage) return rolePage
 
+  if (window.location.pathname === '/login') {
+    return (
+      <div className="login-portal">
+        <a href="/" className="login-back">← Volver al sitio público</a>
+        <Login t={t} onSubmit={handleLogin} />
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
       <Header
@@ -390,8 +496,6 @@ function App() {
         pages={pages}
         page={page}
         session={session}
-        lang={lang}
-        changeLang={changeLang}
         menuOpen={menuOpen}
         setMenuOpen={setMenuOpen}
         goTo={goTo}
@@ -406,32 +510,11 @@ function App() {
 
       <main>
         {page === 'inicio' && <Inicio t={t} lang={lang} goTo={goTo} />}
-        {page === 'nosotros' && <Nosotros t={t} lang={lang} reviews={reviews} onReview={handleReview} />}
+        {page === 'nosotros' && <Nosotros t={t} lang={lang} reviews={reviews} session={session} onReview={handleReview} onDeleteReview={deleteReview} />}
         {page === 'servicios' && <Servicios t={t} lang={lang} goTo={goTo} />}
         {page === 'galeria' && <Galeria t={t} lang={lang} gallery={gallery} goTo={goTo} />}
         {page === 'noticias' && <Noticias t={t} lang={lang} events={events} goTo={goTo} />}
         {page === 'contacto' && <Contacto t={t} lang={lang} onSubmit={handleContact} />}
-        {page === 'login' && <Login t={t} lang={lang} onSubmit={handleLogin} />}
-        {page === 'admin' && <AdminDashboard />}
-        {page === 'dashboard' && (
-          <Dashboard
-            t={t}
-            session={session}
-            messages={messages}
-            reviews={reviews}
-            gallery={gallery}
-            events={events}
-            tab={dashboardTab}
-            setTab={setDashboardTab}
-            goTo={goTo}
-            onDeleteMessage={deleteMessage}
-            onSaveGallery={saveGalleryItem}
-            onDeleteGallery={deleteGalleryItem}
-            onSaveEvent={saveEvent}
-            onDeleteEvent={deleteEvent}
-            onDeleteReview={deleteReview}
-          />
-        )}
       </main>
 
       <Footer t={t} pages={pages} goTo={goTo} />
@@ -440,7 +523,7 @@ function App() {
   )
 }
 
-function Header({ t, pages, page, session, lang, changeLang, menuOpen, setMenuOpen, goTo, logout }) {
+function Header({ t, pages, page, session, menuOpen, setMenuOpen, goTo, logout }) {
   return (
     <header className="site-header">
       <div className="header-main">
@@ -456,19 +539,8 @@ function Header({ t, pages, page, session, lang, changeLang, menuOpen, setMenuOp
         </button>
 
         <div className="header-actions">
-          <div className="language-switcher" aria-label="Idioma">
-            <button className={lang === 'es' ? 'active' : ''} type="button" onClick={() => changeLang('es')}>ES</button>
-            <button className={lang === 'en' ? 'active' : ''} type="button" onClick={() => changeLang('en')}>EN</button>
-          </div>
-          {session ? (
-            <>
-              <button className="ghost" type="button" onClick={() => goTo(session.user?.role === 'admin' ? 'admin' : 'dashboard')}>{t.nav.dashboard}</button>
-              <button className="ghost" type="button" onClick={logout}>{t.nav.salir}</button>
-            </>
-          ) : (
-            <button className="ghost" type="button" onClick={() => goTo('login')}>{t.nav.ingresar}</button>
-          )}
-          <button className="nav-toggle" type="button" aria-label="Menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+          <button className="ghost" type="button" onClick={() => goTo('login')}>{t.nav.ingresar}</button>
+          <button className={`nav-toggle ${menuOpen ? 'is-open' : ''}`} type="button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
             <span />
             <span />
             <span />
@@ -479,7 +551,8 @@ function Header({ t, pages, page, session, lang, changeLang, menuOpen, setMenuOp
       <nav className={menuOpen ? 'nav-primary open' : 'nav-primary'}>
         {pages.map((item) => (
           <button key={item.id} className={page === item.id ? 'active' : ''} type="button" onClick={() => goTo(item.id)}>
-            {item.label}
+            <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+            <span className="nav-label">{item.label}</span>
           </button>
         ))}
       </nav>
@@ -514,10 +587,7 @@ function Login({ t, onSubmit }) {
           </button>
         </div>
         <button className="btn primary" type="submit">{t.login.submit}</button>
-        <small>Admin: admin@drhga.edu.sv / Admin2026!DRHGA</small>
-        <small>User: user@drhga.edu.sv / Usuario2026!DRHGA</small>
-        <small>Estudiante: estudiante@drhga.edu.sv / Estudiante2026!DRHGA</small>
-        <small>Docente: docente@drhga.edu.sv / Docente2026!DRHGA</small>
+        <small>Admin: admin@drhga.edu.sv / usalacontraseña</small>
       </form>
     </section>
   )
@@ -824,7 +894,7 @@ function Footer({ t, pages, goTo }) {
       </div>
       <div>
         <h4>CONTACTO</h4>
-        <p>+503 2330-4037<br />escuela.342@clases.edu.sv<br />Lunes a viernes: 7:00 AM - 4:00 PM</p>
+        <p>+503 2330-4037<br /><br />escuela.342@clases.edu.sv<br /><br />Lunes a viernes: 7:00 AM - 4:00 PM</p>
       </div>
       <p className="copyright">2026 Centro Escolar Dr. Hermogenes Alvarado. Todos los derechos reservados.</p>
     </footer>
@@ -862,7 +932,7 @@ function FloatingButtons() {
 
   return (
     <div className="floating-actions" ref={containerRef} aria-label="Redes sociales">
-      <a href="https://www.facebook.com/" target="_blank" rel="noreferrer" aria-label="Facebook" data-tip="Contáctanos por Facebook">
+      <a href="https://www.facebook.com/cehermogenes/?locale=es_LA" target="_blank" rel="noreferrer" aria-label="Facebook" data-tip="Contáctanos por Facebook">
         <span className="floating-tip">Contáctanos por Facebook</span>
         <img src="/img/Logo_de_Facebook.png" alt="" />
       </a>
