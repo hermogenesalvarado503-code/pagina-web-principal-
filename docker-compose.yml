@@ -28,6 +28,9 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://drhga:drhga@postgres:5432/drhga}
       JWT_SECRET: ${JWT_SECRET:-cambia-este-secreto-en-produccion}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      GMAIL_EMAIL: ${GMAIL_EMAIL:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      PASSWORD_CHANGE_EMAIL: ${PASSWORD_CHANGE_EMAIL:-}
     ports:
       - "${API_PORT:-4000}:4000"
     depends_on:

@@ -118,6 +118,17 @@ function formatDeviceLabel(label) {
   return label || 'Desconocido'
 }
 
+// Validar contraseña: mínimo 8 caracteres, mayúscula, minúscula, número y carácter especial
+function validatePassword(password) {
+  const errors = []
+  if (password.length < 8) errors.push('Mínimo 8 caracteres')
+  if (!/[A-Z]/.test(password)) errors.push('Al menos una letra mayúscula')
+  if (!/[a-z]/.test(password)) errors.push('Al menos una letra minúscula')
+  if (!/\d/.test(password)) errors.push('Al menos un número')
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push('Al menos un carácter especial (!@#$%^&* etc.)')
+  return errors
+}
+
 export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState('overview')
   const [gallery, setGallery] = useState([])
@@ -131,6 +142,15 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [analyticsView, setAnalyticsView] = useState('resumen')
   const [analytics, setAnalytics] = useState(defaultAnalytics)
+  const [changePasswordForm, setChangePasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  const [passwordErrors, setPasswordErrors] = useState([])
+  const [showPasswords, setShowPasswords] = useState({ current: false, new: false, confirm: false })
+  const [passwordChangeStep, setPasswordChangeStep] = useState('form') // 'form' | 'otp' | 'success'
+  const [passwordChangeToken, setPasswordChangeToken] = useState('')
+  const [otpCode, setOtpCode] = useState('')
+  const [otpTimeLeft, setOtpTimeLeft] = useState(300) // 5 minutos
+  const [passwordHistory, setPasswordHistory] = useState([])
+  const [accessLogs, setAccessLogs] = useState([])
 
   const compactMonthlyTrend = (analytics?.monthlyTrend || []).slice(-5)
 
@@ -269,13 +289,111 @@ export default function AdminDashboard() {
     }
   }
 
+  async function handleChangePassword(e) {
+    e.preventDefault()
+    const { currentPassword, newPassword, confirmPassword } = changePasswordForm
+    
+    // Validar que las contraseñas coincidan
+    if (newPassword !== confirmPassword) {
+      setPasswordErrors(['Las contraseñas no coinciden.'])
+      return
+    }
+
+    // Validar fortaleza de la nueva contraseña
+    const errors = validatePassword(newPassword)
+    if (errors.length > 0) {
+      setPasswordErrors(errors)
+      return
+    }
+
+    try {
+      const result = await request('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
+      setPasswordChangeToken(result.token)
+      setPasswordChangeStep('otp')
+      setOtpTimeLeft(300)
+      setPasswordErrors([])
+      setNotice('Se envió un código a tu email. Válido por 5 minutos.')
+    } catch (error) {
+      setPasswordErrors([error.message])
+    }
+  }
+
+  async function handleValidateOTP(e) {
+    e.preventDefault()
+    if (!otpCode) {
+      setPasswordErrors(['Ingresa el código OTP'])
+      return
+    }
+
+    try {
+      await request('/api/auth/validate-password-change', {
+        method: 'POST',
+        body: JSON.stringify({ token: passwordChangeToken, otpCode }),
+      })
+      setPasswordChangeStep('success')
+      setPasswordErrors([])
+      setNotice('Contraseña cambiada correctamente.')
+      
+      // Resetear después de 3 segundos
+      setTimeout(() => {
+        setPasswordChangeForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+        setOtpCode('')
+        setPasswordChangeToken('')
+        setPasswordChangeStep('form')
+        loadPasswordHistory()
+      }, 3000)
+    } catch (error) {
+      setPasswordErrors([error.message])
+    }
+  }
+
+  async function loadPasswordHistory() {
+    try {
+      const history = await request('/api/auth/password-history')
+      setPasswordHistory(history)
+    } catch (error) {
+      console.error('Error cargando historial:', error)
+    }
+  }
+
+  async function loadAccessLogs() {
+    try {
+      const logs = await request('/api/auth/access-logs')
+      setAccessLogs(logs)
+    } catch (error) {
+      console.error('Error cargando accesos:', error)
+    }
+  }
+
+  // Temporizador para OTP
+  useEffect(() => {
+    if (passwordChangeStep !== 'otp' || otpTimeLeft <= 0) return
+    
+    const timer = setInterval(() => {
+      setOtpTimeLeft((prev) => {
+        if (prev <= 1) {
+          setPasswordChangeStep('form')
+          setPasswordErrors(['El código de validación ha expirado'])
+          setOtpCode('')
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [passwordChangeStep, otpTimeLeft])
+
   return (
     <AdminLayout activeSection={activeSection} onNavigate={setActiveSection}>
       <section style={{ padding: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <h2>Panel de Administración</h2>
-            <p>{activeSection === 'overview' ? 'Resumen de administración de contenidos.' : activeSection === 'users' ? 'Gestión de usuarios en desarrollo.' : activeSection === 'gallery' ? 'Gestiona la galería visible en el sitio.' : activeSection === 'events' ? 'Gestiona noticias y eventos.' : activeSection === 'messages' ? 'Consulta y responde los mensajes recibidos desde Contáctanos.' : 'Gestiona reseñas aprobadas.'}</p>
+            <p>{activeSection === 'overview' ? 'Resumen de administración de contenidos.' : activeSection === 'users' ? 'Gestión de usuarios en desarrollo.' : activeSection === 'gallery' ? 'Gestiona la galería visible en el sitio.' : activeSection === 'events' ? 'Gestiona noticias y eventos.' : activeSection === 'messages' ? 'Consulta y responde los mensajes recibidos desde Contáctanos.' : activeSection === 'reviews' ? 'Gestiona reseñas aprobadas.' : 'Administra tu perfil y seguridad.'}</p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn primary" type="button" onClick={() => { setEditingGallery({ title: '', description: '', image_url: '', sort_order: 0 }); setEditingEvent(null) }}>
@@ -618,6 +736,277 @@ export default function AdminDashboard() {
                       </div>
                     </article>
                   ))}
+                </div>
+              </section>
+            )}
+
+            {activeSection === 'profile' && (
+              <section style={{ maxWidth: '900px' }}>
+                <div style={{ display: 'grid', gap: 24 }}>
+                  {/* Formulario de cambio de contraseña */}
+                  <div style={{ padding: 20, background: 'white', borderRadius: 12, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                    <div className="section-heading">
+                      <p className="eyebrow">Seguridad</p>
+                      <h3>{passwordChangeStep === 'form' ? 'Cambiar contraseña' : passwordChangeStep === 'otp' ? 'Validar código OTP' : 'Éxito'}</h3>
+                    </div>
+
+                    {passwordChangeStep === 'form' && (
+                      <form onSubmit={handleChangePassword} style={{ display: 'grid', gap: 16 }}>
+                        <div style={{ display: 'grid', gap: 12 }}>
+                          {/* Contraseña actual */}
+                          <div style={{ position: 'relative' }}>
+                            <label htmlFor="currentPassword" style={{ display: 'block', marginBottom: 6, fontSize: '0.9rem', fontWeight: 600 }}>
+                              Contraseña actual
+                            </label>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                              <input
+                                id="currentPassword"
+                                type={showPasswords.current ? 'text' : 'password'}
+                                value={changePasswordForm.currentPassword}
+                                onChange={(e) => setChangePasswordForm({ ...changePasswordForm, currentPassword: e.target.value })}
+                                placeholder="Ingresa tu contraseña actual"
+                                required
+                                style={{ flex: 1, paddingRight: 40 }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                                style={{ position: 'absolute', right: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                              >
+                                {showPasswords.current ? '🙈' : '👁️'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Nueva contraseña */}
+                          <div style={{ position: 'relative' }}>
+                            <label htmlFor="newPassword" style={{ display: 'block', marginBottom: 6, fontSize: '0.9rem', fontWeight: 600 }}>
+                              Nueva contraseña
+                            </label>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                              <input
+                                id="newPassword"
+                                type={showPasswords.new ? 'text' : 'password'}
+                                value={changePasswordForm.newPassword}
+                                onChange={(e) => setChangePasswordForm({ ...changePasswordForm, newPassword: e.target.value })}
+                                placeholder="Mínimo 8 caracteres con mayúscula, minúscula, número y símbolo"
+                                required
+                                style={{ flex: 1, paddingRight: 40 }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                                style={{ position: 'absolute', right: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                              >
+                                {showPasswords.new ? '🙈' : '👁️'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Confirmar contraseña */}
+                          <div style={{ position: 'relative' }}>
+                            <label htmlFor="confirmPassword" style={{ display: 'block', marginBottom: 6, fontSize: '0.9rem', fontWeight: 600 }}>
+                              Confirmar contraseña
+                            </label>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                              <input
+                                id="confirmPassword"
+                                type={showPasswords.confirm ? 'text' : 'password'}
+                                value={changePasswordForm.confirmPassword}
+                                onChange={(e) => setChangePasswordForm({ ...changePasswordForm, confirmPassword: e.target.value })}
+                                placeholder="Repite tu nueva contraseña"
+                                required
+                                style={{ flex: 1, paddingRight: 40 }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                                style={{ position: 'absolute', right: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                              >
+                                {showPasswords.confirm ? '🙈' : '👁️'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Requisitos de contraseña */}
+                        {changePasswordForm.newPassword && (
+                          <div style={{ padding: 12, background: '#f3f4f6', borderRadius: 8, fontSize: '0.9rem' }}>
+                            <strong style={{ display: 'block', marginBottom: 8 }}>Requisitos de contraseña:</strong>
+                            <div style={{ display: 'grid', gap: 4 }}>
+                              <div style={{ color: changePasswordForm.newPassword.length >= 8 ? '#10b981' : '#ef4444' }}>
+                                ✓ Mínimo 8 caracteres
+                              </div>
+                              <div style={{ color: /[A-Z]/.test(changePasswordForm.newPassword) ? '#10b981' : '#ef4444' }}>
+                                ✓ Al menos una letra mayúscula
+                              </div>
+                              <div style={{ color: /[a-z]/.test(changePasswordForm.newPassword) ? '#10b981' : '#ef4444' }}>
+                                ✓ Al menos una letra minúscula
+                              </div>
+                              <div style={{ color: /\d/.test(changePasswordForm.newPassword) ? '#10b981' : '#ef4444' }}>
+                                ✓ Al menos un número
+                              </div>
+                              <div style={{ color: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(changePasswordForm.newPassword) ? '#10b981' : '#ef4444' }}>
+                                ✓ Al menos un carácter especial (!@#$%^&* etc.)
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Errores */}
+                        {passwordErrors.length > 0 && (
+                          <div style={{ padding: 12, background: '#fee2e2', borderRadius: 8, borderLeft: '4px solid #ef4444', color: '#991b1b' }}>
+                            <strong style={{ display: 'block', marginBottom: 8 }}>Errores:</strong>
+                            <ul style={{ margin: 0, paddingLeft: 20 }}>
+                              {passwordErrors.map((error, index) => (
+                                <li key={index} style={{ marginBottom: 4 }}>{error}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Botones */}
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          <button className="btn primary" type="submit">
+                            Enviar código de validación
+                          </button>
+                          <button
+                            className="btn secondary"
+                            type="button"
+                            onClick={() => {
+                              setChangePasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+                              setPasswordErrors([])
+                            }}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {passwordChangeStep === 'otp' && (
+                      <form onSubmit={handleValidateOTP} style={{ display: 'grid', gap: 16 }}>
+                        <div style={{ padding: 16, background: '#eff6ff', borderRadius: 8, borderLeft: '4px solid #3b82f6', color: '#1e40af' }}>
+                          <strong>✓ Código enviado a tu email</strong>
+                          <p style={{ margin: '8px 0 0 0', fontSize: '0.9rem' }}>Se envió un código de 6 dígitos válido por <strong>{Math.floor(otpTimeLeft / 60)}:{(otpTimeLeft % 60).toString().padStart(2, '0')}</strong></p>
+                        </div>
+
+                        <div>
+                          <label htmlFor="otpCode" style={{ display: 'block', marginBottom: 6, fontSize: '0.9rem', fontWeight: 600 }}>
+                            Código OTP (6 dígitos)
+                          </label>
+                          <input
+                            id="otpCode"
+                            type="text"
+                            maxLength="6"
+                            value={otpCode}
+                            onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            placeholder="000000"
+                            required
+                            style={{ fontSize: '24px', letterSpacing: '8px', textAlign: 'center', fontFamily: 'monospace' }}
+                          />
+                        </div>
+
+                        {otpTimeLeft <= 60 && (
+                          <div style={{ padding: 12, background: '#fef2f2', borderRadius: 8, borderLeft: '4px solid #ef4444', color: '#991b1b', fontSize: '0.9rem' }}>
+                            ⏱️ Quedan solo {otpTimeLeft} segundos para validar
+                          </div>
+                        )}
+
+                        {passwordErrors.length > 0 && (
+                          <div style={{ padding: 12, background: '#fee2e2', borderRadius: 8, borderLeft: '4px solid #ef4444', color: '#991b1b' }}>
+                            <strong style={{ display: 'block', marginBottom: 8 }}>Errores:</strong>
+                            <ul style={{ margin: 0, paddingLeft: 20 }}>
+                              {passwordErrors.map((error, index) => (
+                                <li key={index} style={{ marginBottom: 4 }}>{error}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          <button className="btn primary" type="submit">
+                            Validar código
+                          </button>
+                          <button
+                            className="btn secondary"
+                            type="button"
+                            onClick={() => {
+                              setPasswordChangeStep('form')
+                              setOtpCode('')
+                              setPasswordErrors([])
+                            }}
+                          >
+                            Atrás
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {passwordChangeStep === 'success' && (
+                      <div style={{ padding: 20, textAlign: 'center' }}>
+                        <div style={{ fontSize: '48px', marginBottom: 16 }}>✅</div>
+                        <h4 style={{ margin: '0 0 8px 0' }}>Contraseña actualizada</h4>
+                        <p style={{ color: '#666', marginBottom: 16 }}>Tu contraseña ha sido cambiada exitosamente. Se envió un email de confirmación.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Historial de cambios */}
+                  <div style={{ padding: 20, background: 'white', borderRadius: 12, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <h3 style={{ margin: 0 }}>Historial de cambios de contraseña</h3>
+                      <button className="btn secondary" type="button" onClick={loadPasswordHistory} style={{ fontSize: '0.9rem' }}>
+                        Recargar
+                      </button>
+                    </div>
+                    {passwordHistory.length === 0 ? (
+                      <p style={{ color: '#999' }}>No hay cambios registrados.</p>
+                    ) : (
+                      <div style={{ display: 'grid', gap: 12 }}>
+                        {passwordHistory.map((entry) => (
+                          <div key={entry.id} style={{ padding: 12, background: '#f9fafb', borderRadius: 8, borderLeft: '4px solid #10b981' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <strong>{entry.browser} en {entry.device}</strong>
+                              <small style={{ color: '#999' }}>{new Date(entry.changed_at).toLocaleString('es-SV')}</small>
+                            </div>
+                            <div style={{ fontSize: '0.9rem', color: '#666' }}>
+                              <div>🌐 IP: <code style={{ background: '#fff', padding: '2px 6px', borderRadius: 4 }}>{entry.ip_address || 'Desconocida'}</code></div>
+                              <div>💻 SO: {entry.os}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Historial de accesos */}
+                  <div style={{ padding: 20, background: 'white', borderRadius: 12, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <h3 style={{ margin: 0 }}>Accesos a administración</h3>
+                      <button className="btn secondary" type="button" onClick={loadAccessLogs} style={{ fontSize: '0.9rem' }}>
+                        Recargar
+                      </button>
+                    </div>
+                    {accessLogs.length === 0 ? (
+                      <p style={{ color: '#999' }}>No hay accesos registrados.</p>
+                    ) : (
+                      <div style={{ display: 'grid', gap: 12 }}>
+                        {accessLogs.slice(0, 10).map((log) => (
+                          <div key={log.id} style={{ padding: 12, background: '#f9fafb', borderRadius: 8, borderLeft: '4px solid #3b82f6' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <strong>{log.browser} en {log.device}</strong>
+                              <small style={{ color: '#999' }}>{new Date(log.accessed_at).toLocaleString('es-SV')}</small>
+                            </div>
+                            <div style={{ fontSize: '0.9rem', color: '#666' }}>
+                              <div>🌐 IP: <code style={{ background: '#fff', padding: '2px 6px', borderRadius: 4 }}>{log.ip_address || 'Desconocida'}</code></div>
+                              <div>💻 {log.os} • {log.action || 'Acceso'}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
             )}

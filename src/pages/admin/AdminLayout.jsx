@@ -8,6 +8,7 @@ const sections = [
   { id: 'events', label: 'Noticias', icon: '✧' },
   { id: 'messages', label: 'Mensajes', icon: '✉' },
   { id: 'reviews', label: 'Reseñas', icon: '★' },
+  { id: 'profile', label: 'Perfil', icon: '◉' },
 ]
 
 export default function AdminLayout({ children, activeSection, onNavigate }) {

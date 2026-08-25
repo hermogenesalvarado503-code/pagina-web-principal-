@@ -116,6 +116,79 @@ export const swaggerSpec = {
         },
       },
     },
+        '/api/auth/change-password': {
+      post: {
+        summary: 'Initiate password change (send OTP to email)',
+        tags: ['Auth'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  currentPassword: { type: 'string', description: 'Current password for verification' },
+                  newPassword: { type: 'string', description: 'Must contain: uppercase, lowercase, number, special char, min 8 chars' },
+                },
+                required: ['currentPassword', 'newPassword'],
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'OTP sent to email, use token with /api/auth/validate-password-change' },
+          400: { description: 'Password validation failed or new password too weak' },
+          401: { description: 'Current password incorrect or not authenticated' },
+        },
+      },
+    },
+      '/api/auth/validate-password-change': {
+      post: {
+        summary: 'Validate OTP and complete password change',
+        tags: ['Auth'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  token: { type: 'string', description: 'Password change validation token from /api/auth/change-password' },
+                  otpCode: { type: 'string', description: '6-digit OTP sent by email' },
+                },
+                required: ['token', 'otpCode'],
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Password updated successfully, confirmation email sent' },
+          400: { description: 'Invalid token, expired OTP, or validation failed' },
+          401: { description: 'Not authenticated' },
+        },
+      },
+    },
+    '/api/auth/password-history': {
+      get: {
+        summary: 'Get password change history',
+        tags: ['Auth'],
+        responses: {
+          200: { description: 'List of password change history with IP, browser, OS, and device info' },
+          401: { description: 'Not authenticated' },
+        },
+      },
+    },
+    '/api/auth/access-logs': {
+      get: {
+        summary: 'Get admin access logs',
+        tags: ['Auth'],
+        responses: {
+          200: { description: 'List of admin panel access logs with IP, browser, OS, device, and action' },
+          401: { description: 'Not authenticated' },
+          403: { description: 'Not admin' },
+        },
+      },
+    },
     '/api/me': {
       get: {
         summary: 'Get current user',

@@ -1,7 +1,10 @@
+import dotenv from 'dotenv'
+dotenv.config()
 import crypto from 'node:crypto'
 import http from 'node:http'
 import { URL } from 'node:url'
 import pg from 'pg'
+
 
 const { Pool } = pg
 
@@ -126,6 +129,86 @@ function requireAdmin(req, res) {
   return user
 }
 
+// Helper para obtener IP del cliente
+function getClientIP(req) {
+  return (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket.remoteAddress || '').split(',')[0].trim()
+}
+
+// Helper para parsear User Agent
+function parseUserAgent(userAgent) {
+  const ua = userAgent || ''
+  let browser = 'Desconocido'
+  let os = 'Desconocido'
+  let device = 'Desktop'
+
+  // Detectar navegador
+  if (/Firefox\//i.test(ua)) browser = 'Firefox'
+  else if (/Edg\//i.test(ua)) browser = 'Edge'
+  else if (/Chrome\//i.test(ua)) browser = 'Chrome'
+  else if (/Safari\//i.test(ua)) browser = 'Safari'
+  else if (/Opera\//i.test(ua)) browser = 'Opera'
+
+  // Detectar SO
+  if (/Windows/i.test(ua)) os = 'Windows'
+  else if (/Mac OS X/i.test(ua)) os = 'macOS'
+  else if (/Linux/i.test(ua)) os = 'Linux'
+  else if (/Android/i.test(ua)) os = 'Android'
+  else if (/iPhone|iPad/i.test(ua)) os = 'iOS'
+
+  // Detectar dispositivo
+  if (/Mobile|Android|iPhone|iPod/i.test(ua)) device = 'Móvil'
+  else if (/iPad|Tablet/i.test(ua)) device = 'Tablet'
+
+  return { browser, os, device }
+}
+
+// Generar token de validación
+function generateValidationToken() {
+  return crypto.randomBytes(32).toString('hex')
+}
+
+// Generar código OTP de 6 dígitos
+function generateOTPCode() {
+  return crypto.randomInt(100000, 1000000).toString()
+}
+
+function hashOTP(otpCode) {
+  return crypto.createHash('sha256').update(otpCode).digest('hex')
+}
+
+function safeEqualText(left, right) {
+  if (typeof left !== 'string' || typeof right !== 'string') return false
+  const leftBuffer = Buffer.from(left)
+  const rightBuffer = Buffer.from(right)
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer)
+}
+
+// Helper para enviar emails (en prueba )
+import nodemailer from 'nodemailer'
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_EMAIL,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+})
+
+async function sendEmail(to, subject, html) {
+  try {
+    await transporter.sendMail({
+      from: `"DRHGA" <${process.env.GMAIL_EMAIL}>`,
+      to,
+      subject,
+      html,
+    })
+    return true
+  } catch (error) {
+    console.error('Error enviando email:', error)
+    return false
+  }
+}
+
 async function seedAnalyticsData() {
   const existing = await pool.query('SELECT COUNT(*)::int AS total FROM page_views')
   if (Number(existing.rows[0].total) > 0) return
@@ -244,6 +327,53 @@ async function migrate() {
       device TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS password_change_tokens (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT UNIQUE NOT NULL,
+      otp_hash TEXT,
+      new_password_salt TEXT,
+      new_password_hash TEXT,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    ALTER TABLE password_change_tokens
+      ADD COLUMN IF NOT EXISTS otp_hash TEXT;
+    ALTER TABLE password_change_tokens
+      ADD COLUMN IF NOT EXISTS new_password_salt TEXT;
+    ALTER TABLE password_change_tokens
+      ADD COLUMN IF NOT EXISTS new_password_hash TEXT;
+
+    CREATE TABLE IF NOT EXISTS password_change_history (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ip_address TEXT,
+      user_agent TEXT,
+      browser TEXT,
+      os TEXT,
+      device TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_access_logs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      ip_address TEXT,
+      user_agent TEXT,
+      browser TEXT,
+      os TEXT,
+      device TEXT,
+      action TEXT,
+      resource TEXT,
+      accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_password_change_tokens_expires ON password_change_tokens(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_admin_access_logs_user_id ON admin_access_logs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_password_change_history_user_id ON password_change_history(user_id);
   `)
 
   await seedAnalyticsData()
@@ -488,6 +618,7 @@ async function router(req, res) {
           '/api/health': { get: { summary: 'Health check' } },
           '/api/auth/login': { post: { summary: 'Login with email and password' } },
           '/api/auth/logout': { post: { summary: 'Logout' } },
+          '/api/auth/change-password': { post: { summary: 'Change password (authenticated users)' } },
           '/api/me': { get: { summary: 'Get current user' } },
           '/api/gallery': { get: { summary: 'List gallery' }, post: { summary: 'Add gallery (admin)' } },
           '/api/gallery/{id}': { put: { summary: 'Update gallery (admin)' }, delete: { summary: 'Delete gallery (admin)' } },
@@ -562,6 +693,198 @@ async function router(req, res) {
     if (req.method === 'POST' && path === '/api/auth/logout') {
       setCookie(res, COOKIE_NAME, '', { path: '/', maxAge: 0, httpOnly: true, sameSite: 'Lax' })
       return json(req, res, 200, { ok: true })
+    }
+
+    if (req.method === 'POST' && path === '/api/auth/change-password') {
+      const auth = requireAuth(req, res)
+      if (!auth) return
+
+      const { currentPassword, newPassword } = await readBody(req)
+
+      // Validar que se proporcionen los datos
+      if (!currentPassword || !newPassword) {
+        return json(req, res, 400, { error: 'Faltan campos requeridos' })
+      }
+
+      // Validar fortaleza de la nueva contraseña
+      const passwordRegex = {
+        length: newPassword.length >= 8,
+        uppercase: /[A-Z]/.test(newPassword),
+        lowercase: /[a-z]/.test(newPassword),
+        number: /\d/.test(newPassword),
+        special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword),
+      }
+
+      if (!Object.values(passwordRegex).every(Boolean)) {
+        const missing = []
+        if (!passwordRegex.length) missing.push('mínimo 8 caracteres')
+        if (!passwordRegex.uppercase) missing.push('una letra mayúscula')
+        if (!passwordRegex.lowercase) missing.push('una letra minúscula')
+        if (!passwordRegex.number) missing.push('un número')
+        if (!passwordRegex.special) missing.push('un carácter especial')
+        return json(req, res, 400, { error: `La contraseña debe contener: ${missing.join(', ')}` })
+      }
+
+      // Verificar contraseña actual
+      const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [auth.sub])
+      const user = userResult.rows[0]
+      if (!user || !verifyPassword(currentPassword, user.password_salt, user.password_hash)) {
+        return json(req, res, 401, { error: 'Contraseña actual incorrecta' })
+      }
+
+      // Generar código OTP de 6 dígitos
+      const otpCode = generateOTPCode()
+      const otpHash = hashOTP(otpCode)
+      const token = generateValidationToken()
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutos
+
+      // Generar hash de la nueva contraseña
+      const { salt, hash } = hashPassword(newPassword)
+
+      // Guardar token en la BD
+      await pool.query(
+        'INSERT INTO password_change_tokens (user_id, token, otp_hash, new_password_salt, new_password_hash, expires_at) VALUES ($1, $2, $3, $4, $5, $6)',
+        [auth.sub, token, otpHash, salt, hash, expiresAt]
+      )
+
+      // Enviar email con código OTP
+      const emailHtml = `
+        <h2>Validación de cambio de contraseña</h2>
+        <p>Hola ${user.name},</p>
+        <p>Se solicitó un cambio de contraseña en tu cuenta de administrador.</p>
+        <p><strong>Tu código de validación es:</strong></p>
+        <h1 style="font-size: 32px; letter-spacing: 5px; font-family: monospace;">${otpCode}</h1>
+        <p style="color: #666;">Este código expirará en 5 minutos.</p>
+        <p><strong>Si no solicitaste este cambio, ignora este email.</strong></p>
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+        <p style="font-size: 12px; color: #999;">Centro Escolar Dr. Hermógenes Alvarado</p>
+      `
+
+      const passwordChangeEmail = process.env.PASSWORD_CHANGE_EMAIL || user.email
+      const emailSent = await sendEmail(passwordChangeEmail, 'Validación de cambio de contraseña', emailHtml)
+      if (!emailSent) {
+        await pool.query('DELETE FROM password_change_tokens WHERE token = $1', [token])
+        return json(req, res, 502, { error: 'No se pudo enviar el código al correo configurado' })
+      }
+
+      return json(req, res, 200, { 
+        ok: true, 
+        message: 'Código de validación enviado al email. Válido por 5 minutos.',
+        token: token,
+      })
+    }
+
+    // Endpoint para validar código OTP y aplicar cambio de contraseña
+    if (req.method === 'POST' && path === '/api/auth/validate-password-change') {
+      const auth = requireAuth(req, res)
+      if (!auth) return
+
+      const { token, otpCode } = await readBody(req)
+
+      if (!token || !otpCode || !/^\d{6}$/.test(String(otpCode))) {
+        return json(req, res, 400, { error: 'Faltan campos requeridos' })
+      }
+
+      // Verificar token
+      const tokenResult = await pool.query(
+        'SELECT * FROM password_change_tokens WHERE token = $1 AND user_id = $2 AND used = false',
+        [token, auth.sub]
+      )
+      const tokenRecord = tokenResult.rows[0]
+
+      if (!tokenRecord) {
+        return json(req, res, 400, { error: 'Token inválido o expirado' })
+      }
+
+      if (new Date(tokenRecord.expires_at) < new Date()) {
+        await pool.query('DELETE FROM password_change_tokens WHERE id = $1', [tokenRecord.id])
+        return json(req, res, 400, { error: 'El código de validación ha expirado' })
+      }
+
+      if (!tokenRecord.otp_hash || !safeEqualText(hashOTP(String(otpCode)), tokenRecord.otp_hash)) {
+        return json(req, res, 401, { error: 'Código de validación incorrecto' })
+      }
+
+      if (!tokenRecord.new_password_salt || !tokenRecord.new_password_hash) {
+        return json(req, res, 400, { error: 'Solicitud de cambio incompleta. Solicita un nuevo código.' })
+      }
+
+      // Aplicar cambio de contraseña
+      const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [auth.sub])
+      const user = userResult.rows[0]
+
+      const ip = getClientIP(req)
+      const ua = req.headers['user-agent'] || ''
+      const { browser, os, device } = parseUserAgent(ua)
+
+      // Actualizar contraseña
+      await pool.query(
+        'UPDATE users SET password_salt = $1, password_hash = $2 WHERE id = $3',
+        [tokenRecord.new_password_salt, tokenRecord.new_password_hash, auth.sub]
+      )
+
+      // Registrar en historial
+      await pool.query(
+        'INSERT INTO password_change_history (user_id, ip_address, user_agent, browser, os, device) VALUES ($1, $2, $3, $4, $5, $6)',
+        [auth.sub, ip, ua, browser, os, device]
+      )
+
+      // Marcar token como usado
+      await pool.query('UPDATE password_change_tokens SET used = true WHERE id = $1', [tokenRecord.id])
+
+      // Limpiar datos temporales
+      delete global.tempPasswordData[tempKey]
+
+      // Enviar email de confirmación
+      const confirmEmail = `
+        <h2>Contraseña cambiada exitosamente</h2>
+        <p>Hola ${user.name},</p>
+        <p>Tu contraseña ha sido cambiada exitosamente.</p>
+        <p><strong>Detalles del cambio:</strong></p>
+        <ul>
+          <li>Dirección IP: ${ip}</li>
+          <li>Navegador: ${browser}</li>
+          <li>Sistema: ${os}</li>
+          <li>Dispositivo: ${device}</li>
+          <li>Hora: ${new Date().toLocaleString('es-SV')}</li>
+        </ul>
+        <p style="color: #ff6b6b;"><strong>Si no realizaste este cambio, contacta al administrador inmediatamente.</strong></p>
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+        <p style="font-size: 12px; color: #999;">Centro Escolar Dr. Hermógenes Alvarado</p>
+      `
+
+      await sendEmail(user.email, 'Contraseña cambiada exitosamente', confirmEmail)
+
+      return json(req, res, 200, { 
+        ok: true, 
+        message: 'Contraseña actualizada correctamente. Confirma por email.',
+      })
+    }
+
+    // Endpoint para obtener historial de cambios de contraseña
+    if (req.method === 'GET' && path === '/api/auth/password-history') {
+      const auth = requireAuth(req, res)
+      if (!auth) return
+
+      const result = await pool.query(
+        'SELECT id, changed_at, ip_address, browser, os, device FROM password_change_history WHERE user_id = $1 ORDER BY changed_at DESC LIMIT 10',
+        [auth.sub]
+      )
+
+      return json(req, res, 200, result.rows)
+    }
+
+    // Endpoint para obtener historial de accesos a administración
+    if (req.method === 'GET' && path === '/api/auth/access-logs') {
+      const auth = requireAdmin(req, res)
+      if (!auth) return
+
+      const result = await pool.query(
+        'SELECT id, accessed_at, ip_address, browser, os, device, action FROM admin_access_logs WHERE user_id = $1 ORDER BY accessed_at DESC LIMIT 20',
+        [auth.sub]
+      )
+
+      return json(req, res, 200, result.rows)
     }
 
     if (req.method === 'GET' && path === '/api/gallery') {

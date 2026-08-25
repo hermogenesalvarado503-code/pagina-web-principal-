@@ -156,6 +156,9 @@ function App() {
   }, [])
 
   useEffect(() => {
+    // Safely check if DOM is ready before querying elements
+    if (!document.body) return
+    
     const elements = Array.from(document.querySelectorAll('[data-reveal]'))
     if (!elements.length) return
 
@@ -193,7 +196,8 @@ function App() {
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ user: data.user }))
           setDashboardTab(defaultTabForRole(data.user.role))
         }
-      } catch {
+      } catch (err) {
+        // Silently handle 401 or missing session - this is expected for non-authenticated users
         localStorage.removeItem(SESSION_STORAGE_KEY)
       }
     }
