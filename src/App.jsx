@@ -945,9 +945,9 @@ function FloatingButtons() {
         <span className="floating-tip">Escríbenos por WhatsApp</span>
         <img src="/img/WhatsAp.png" alt="" />
       </a>
-      <a href="mailto:escuela.342@clases.edu.sv" aria-label="Gmail" data-tip="Escríbenos por Gmail">
+      <a href="https://mail.google.com/mail/?view=cm&fs=1&to=escuela.342%40clases.edu.sv" target="_blank" rel="noreferrer" aria-label="Gmail" data-tip="Escríbenos por Gmail">
         <span className="floating-tip">Escríbenos por Gmail</span>
-        <img src="/img/gmail.svg" alt="" />
+        <img src="/img/gmail.svg" alt="Logo de Gmail" />
       </a>
     </div>
   )
