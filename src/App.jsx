@@ -947,7 +947,7 @@ function FloatingButtons() {
       </a>
       <a href="https://mail.google.com/mail/?view=cm&fs=1&to=escuela.342%40clases.edu.sv" target="_blank" rel="noreferrer" aria-label="Gmail" data-tip="Escríbenos por Gmail">
         <span className="floating-tip">Escríbenos por Gmail</span>
-        <img src="/img/gmail.jpeg" alt="Logo de Gmail" />
+        <img src="/img/gmail.jpeg?v=2" alt="Logo de Gmail" />
       </a>
     </div>
   )
