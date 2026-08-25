@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "deploy:firebase": "npm run build && npx firebase-tools deploy --only hosting"
+    "preview": "vite preview"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
