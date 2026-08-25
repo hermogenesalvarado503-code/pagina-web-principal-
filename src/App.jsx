@@ -552,9 +552,10 @@ function Header({ t, pages, page, session, menuOpen, setMenuOpen, goTo, logout }
         </div>
       </div>
 
-      <nav className={menuOpen ? 'nav-primary open' : 'nav-primary'}>
+      {menuOpen && <button className="nav-scrim" type="button" aria-label="Cerrar menú" onClick={() => setMenuOpen(false)} />}
+      <nav className={menuOpen ? 'nav-primary open' : 'nav-primary'} aria-label="Navegación principal">
         {pages.map((item) => (
-          <button key={item.id} className={page === item.id ? 'active' : ''} type="button" onClick={() => goTo(item.id)}>
+          <button key={item.id} className={`${page === item.id ? 'active ' : ''}nav-item-${item.id}`} type="button" onClick={() => goTo(item.id)}>
             <span className="nav-icon" aria-hidden="true">{item.icon}</span>
             <span className="nav-label">{item.label}</span>
           </button>
@@ -943,6 +944,10 @@ function FloatingButtons() {
       <a href="https://wa.me/50323304037" target="_blank" rel="noreferrer" aria-label="WhatsApp" data-tip="Escríbenos por WhatsApp">
         <span className="floating-tip">Escríbenos por WhatsApp</span>
         <img src="/img/WhatsAp.png" alt="" />
+      </a>
+      <a href="mailto:escuela.342@clases.edu.sv" aria-label="Gmail" data-tip="Escríbenos por Gmail">
+        <span className="floating-tip">Escríbenos por Gmail</span>
+        <img src="/img/gmail.svg" alt="" />
       </a>
     </div>
   )
