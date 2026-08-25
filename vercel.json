@@ -1,5 +1,8 @@
 {
   "rewrites": [
+    { "source": "/admin/:path*", "destination": "/index.html" },
+    { "source": "/portal/:path*", "destination": "/index.html" },
+    { "source": "/login", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "cleanUrls": true
