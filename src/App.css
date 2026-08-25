@@ -259,7 +259,26 @@ button {
 }
 
 .nav-primary button::after {
-  display: none;
+  content: "";
+  position: absolute;
+  right: 1rem;
+  bottom: 0.45rem;
+  left: 1rem;
+  display: block;
+  height: 3px;
+  border-radius: 99px;
+  background: #ffd86b;
+  transform: scaleX(0);
+  transition: transform 0.22s ease, background 0.22s ease;
+}
+
+.nav-primary button:hover::after,
+.nav-primary button.active::after {
+  transform: scaleX(1);
+}
+
+.nav-primary button:hover::after {
+  background: #78e7bd;
 }
 
 [data-reveal] {
@@ -1409,6 +1428,7 @@ button {
   }
 
   .nav-primary button::after {
+    display: none;
     right: 28%;
     bottom: 0.28rem;
     left: 28%;
