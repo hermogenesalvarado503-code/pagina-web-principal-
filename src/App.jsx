@@ -220,7 +220,9 @@ function App() {
       return
     }
     if (nextPage === 'login') {
-      window.location.assign('/login')
+      setPage('login')
+      setMenuOpen(false)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
     setPage(nextPage)
@@ -484,7 +486,7 @@ function App() {
   const rolePage = RoleShell()
   if (rolePage) return rolePage
 
-  if (window.location.pathname === '/login') {
+  if (window.location.pathname === '/login' || page === 'login') {
     return (
       <div className="login-portal">
         <a href="/" className="login-back">← Volver al sitio público</a>
