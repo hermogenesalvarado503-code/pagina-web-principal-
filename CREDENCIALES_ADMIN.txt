@@ -1,7 +1,7 @@
 Credenciales de administrador - Sitio Web DRHGA
 
 Correo: admin@drhga.edu.sv
-Contrasena: admin123
+Contrasena: @AdminHermoGenesAlvara503
 
 URL del sitio: http://localhost:4173
 URL del API: http://localhost:4000

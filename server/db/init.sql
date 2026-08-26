@@ -58,11 +58,16 @@ CREATE TABLE IF NOT EXISTS events (
 
 INSERT INTO users (name, email, role, password_salt, password_hash)
 VALUES
-  ('Administrador DRHGA', 'admin@drhga.edu.sv', 'admin', '90c436599b118c9ef52a836852684341', 'f699c9a5c87c8505735256e2f3b9d292d6d9640636abce2d7fe60155c64cfbefce68059b7820492cdf86f98a9bdd1d509ec55b77928e79a423f0e1a7b60129eb'),
+  ('Administrador DRHGA', 'admin@drhga.edu.sv', 'admin', '90c436599b118c9ef52a836852684341', '1ebd06d484f06a5733c391790e50056d807f54d420046b471e6779e457fb156e28b1298ea1a439728bfb5a131a2acdc2d1a51186c4fa7a98434ae3ae6d65004d'),
   ('Usuario Demo', 'user@drhga.edu.sv', 'user', '3f340bda0054dbf668b5e08bec63a75c', 'cfe759ad7571a6fc781f7ecdf267408d4d0a264d1c1bf3594166d24c7c1cc776e10a1717317bd888055a079740453dce1c458c9ba6a9a8b7dd213d2bcca50fb5'),
   ('Estudiante Demo', 'estudiante@drhga.edu.sv', 'student', '22833ab7538c913ff15640e5346caec2', '6f97addd2199969e08d33f3127aa68c9764c36a40ef63370b059ca77fdbbcf53e83706455d1bcc47f5902d78635e7cb9a7412ad1e390b2b1c43acbed3f4d713f'),
   ('Docente Demo', 'docente@drhga.edu.sv', 'teacher', '62713d96c4d93c27f7272c47fc508913', '5080f51f8772adf14fe18fcddf2dade97e335eb2a252c8afabb87c536306e6950dfa8408337d52a97759f61adaea2897b218a27bc571eb7a229a2dfa7f6cb5fd')
 ON CONFLICT (email) DO NOTHING;
+
+UPDATE users
+SET password_salt = '90c436599b118c9ef52a836852684341',
+    password_hash = '1ebd06d484f06a5733c391790e50056d807f54d420046b471e6779e457fb156e28b1298ea1a439728bfb5a131a2acdc2d1a51186c4fa7a98434ae3ae6d65004d'
+WHERE email = 'admin@drhga.edu.sv';
 
 INSERT INTO reviews (name, email, role, rating, comment)
 SELECT 'Maria Garcia', 'maria@example.com', 'Madre de familia', 5, 'Excelente institucion. Mi hijo ha mejorado academica y socialmente.'
