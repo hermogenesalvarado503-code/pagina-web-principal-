@@ -2,17 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import './App.css'
-import AdminDashboard from './pages/admin/AdminDashboard'
-import StudentDashboard from './pages/student/StudentDashboard'
-import TeacherDashboard from './pages/teacher/TeacherDashboard'
-import Inicio from './pages/public/Inicio'
-import Nosotros from './pages/public/Nosotros'
-import Servicios from './pages/public/Servicios'
-import Galeria from './pages/public/Galeria'
-import Noticias from './pages/public/Noticias'
-import Contacto from './pages/public/Contacto'
-import { Page } from './pages/public/PageLayout'
-import { buildPublicTranslations } from './pages/public/content'
+import AdminDashboard from './pages/Administrador/AdminDashboard'
+import StudentDashboard from './pages/Usuario/Portales/StudentDashboard'
+import TeacherDashboard from './pages/Usuario/Portales/TeacherDashboard'
+import Inicio from './pages/Usuario/Frontend/Inicio'
+import Nosotros from './pages/Usuario/Frontend/Nosotros'
+import Servicios from './pages/Usuario/Frontend/Servicios'
+import Galeria from './pages/Usuario/Frontend/Galeria'
+import Noticias from './pages/Usuario/Frontend/Noticias'
+import Contacto from './pages/Usuario/Frontend/Contacto'
+import { Page } from './pages/Usuario/Frontend/PageLayout'
+import { buildPublicTranslations } from './pages/Usuario/Frontend/content'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -947,7 +947,7 @@ function FloatingButtons() {
       </a>
       <a href="https://mail.google.com/mail/?view=cm&fs=1&to=escuela.342%40clases.edu.sv" target="_blank" rel="noreferrer" aria-label="Gmail" data-tip="Escríbenos por Gmail">
         <span className="floating-tip">Escríbenos por Gmail</span>
-        <img src="/img/Gmail.jpeg" alt="Logo de Gmail" />
+        <img src="/img/gmail.jpeg" alt="Logo de Gmail" />
       </a>
     </div>
   )
