@@ -832,9 +832,6 @@ async function router(req, res) {
       // Marcar token como usado
       await pool.query('UPDATE password_change_tokens SET used = true WHERE id = $1', [tokenRecord.id])
 
-      // Limpiar datos temporales
-      delete global.tempPasswordData[tempKey]
-
       // Enviar email de confirmación
       const confirmEmail = `
         <h2>Contraseña cambiada exitosamente</h2>
