@@ -171,14 +171,15 @@ Para habilitar el envío de emails, configurar variables de entorno:
 ```bash
 # Variables de entorno necesarias
 GMAIL_EMAIL=tu-email@gmail.com
-GMAIL_APP_PASSWORD=tu-app-password  # Generar en Google Account Security
+GMAIL_APP_PASSWORD=tu-app-password-de-16-caracteres  # Generar en Google Account Security
+PASSWORD_CHANGE_EMAIL=correo-que-recibe-los-codigos@gmail.com
 ```
 
 **Pasos para obtener App Password en Gmail:**
 1. Ir a myaccount.google.com
 2. Seguridad → Contraseñas de aplicación
 3. Seleccionar "Correo" y "Windows"
-4. Copiar la contraseña generada
+4. Copiar los 16 caracteres generados y configurarlos en `GMAIL_APP_PASSWORD` (sin espacios)
 
 ### Implementación Actual
 En desarrollo, los emails se loguean en consola. Para producción, usar:

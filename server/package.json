@@ -4,14 +4,15 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "start": "node src/server-firebase.js",
-    "dev": "node --watch src/server-firebase.js"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.18.2",
     "firebase-admin": "^12.1.0",
-    "nodemailer": "^7.0.3"
+    "nodemailer": "^7.0.3",
+    "pg": "^8.23.0"
   }
 }

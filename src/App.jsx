@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import './App.css'
@@ -15,6 +15,29 @@ import { Page } from './pages/Usuario/Frontend/PageLayout'
 import { buildPublicTranslations } from './pages/Usuario/Frontend/content'
 
 gsap.registerPlugin(ScrollTrigger)
+
+class PanelErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children
+
+    return (
+      <div style={{ padding: 32, color: '#102a56', fontFamily: 'sans-serif' }}>
+        <h2>No se pudo cargar el panel</h2>
+        <p>Recarga la página. Si el problema continúa, informa este error:</p>
+        <code>{this.state.error.message}</code>
+      </div>
+    )
+  }
+}
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 const SESSION_STORAGE_KEY = 'drhga-session'
@@ -36,8 +59,30 @@ const fallbackEvents = [
     image_url: '/img/DrH.png',
     location: 'Centro Escolar Dr. Hermogenes Alvarado',
     map_iframe: '',
+    is_important: false,
   },
 ]
+
+function normalizeGalleryItem(item) {
+  return {
+    ...item,
+    image_url: item.image_url || item.imageUrl || '',
+    event_date: item.event_date || item.eventDate || '',
+    event_time: item.event_time || item.eventTime || '',
+    sort_order: item.sort_order ?? item.sortOrder ?? 0,
+  }
+}
+
+function normalizeEventItem(item) {
+  return {
+    ...item,
+    image_url: item.image_url || item.imageUrl || '',
+    event_date: item.event_date || item.eventDate || '',
+    event_time: item.event_time || item.eventTime || '',
+    map_iframe: item.map_iframe || item.mapIframe || '',
+    is_important: item.is_important ?? item.isImportant ?? false,
+  }
+}
 
 const copy = {
   es: buildPublicTranslations('es'),
@@ -78,6 +123,7 @@ function App() {
   const [reviews, setReviews] = useState([])
   const [gallery, setGallery] = useState(fallbackGallery)
   const [events, setEvents] = useState(fallbackEvents)
+  const [heroImage, setHeroImage] = useState('')
   const [notice, setNotice] = useState('')
 
   const t = copy[lang]
@@ -96,14 +142,16 @@ function App() {
   }
 
   async function loadPublicData() {
-    const [reviewsResult, galleryResult, eventsResult] = await Promise.allSettled([
+    const [reviewsResult, galleryResult, eventsResult, settingsResult] = await Promise.allSettled([
       fetch(`${API_URL}/api/reviews`).then((res) => res.ok ? res.json() : []),
       fetch(`${API_URL}/api/gallery`).then((res) => res.ok ? res.json() : fallbackGallery),
       fetch(`${API_URL}/api/events`).then((res) => res.ok ? res.json() : fallbackEvents),
+      fetch(`${API_URL}/api/site-settings`).then((res) => res.ok ? res.json() : {}),
     ])
     if (reviewsResult.status === 'fulfilled') setReviews(reviewsResult.value)
-    if (galleryResult.status === 'fulfilled') setGallery(galleryResult.value)
-    if (eventsResult.status === 'fulfilled') setEvents(eventsResult.value)
+    if (galleryResult.status === 'fulfilled') setGallery(galleryResult.value.map(normalizeGalleryItem))
+    if (eventsResult.status === 'fulfilled') setEvents(eventsResult.value.map(normalizeEventItem))
+    if (settingsResult.status === 'fulfilled') setHeroImage(settingsResult.value.heroImageUrl || '')
   }
 
   function detectBrowser(userAgent) {
@@ -208,7 +256,11 @@ function App() {
   useEffect(() => {
     if (!session) return
     const endpoint = session.user.role === 'admin' ? '/api/messages' : '/api/me/messages'
-    fetch(`${API_URL}${endpoint}`, { credentials: 'include' })
+    const token = localStorage.getItem('drhga-token')
+    fetch(`${API_URL}${endpoint}`, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((res) => res.ok ? res.json() : [])
       .then(setMessages)
       .catch(() => setMessages([]))
@@ -231,11 +283,13 @@ function App() {
   }
 
   async function request(path, options = {}) {
+    const token = localStorage.getItem('drhga-token')
     const res = await fetch(`${API_URL}${path}`, {
       credentials: 'include',
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
       },
     })
@@ -284,6 +338,7 @@ function App() {
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries())
     try {
       const data = await request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) })
+      localStorage.setItem('drhga-token', data.token)
       setSession({ user: data.user })
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ user: data.user }))
       setDashboardTab(defaultTabForRole(data.user.role))
@@ -303,12 +358,12 @@ function App() {
     }
   }
 
-  function clearSessionAndRedirectHome() {
+  function clearSessionAndRedirectLogin() {
     try { localStorage.removeItem(SESSION_STORAGE_KEY) } catch (e) {}
+    try { localStorage.removeItem('drhga-token') } catch (e) {}
     setSession(null)
     setMessages([])
-    // use replace to avoid back navigation to protected pages
-    try { window.location.replace('/') } catch (e) {}
+    try { window.location.replace('/login') } catch (e) {}
   }
 
   async function logout() {
@@ -318,6 +373,7 @@ function App() {
       // ignore logout errors, still clear local UI state
     }
     try { localStorage.removeItem(SESSION_STORAGE_KEY) } catch (e) {}
+    try { localStorage.removeItem('drhga-token') } catch (e) {}
     setSession(null)
     setMessages([])
     if (window.location.pathname.startsWith('/admin') || window.location.pathname.startsWith('/portal')) {
@@ -390,11 +446,15 @@ function App() {
         if (!path.startsWith('/admin') && !path.startsWith('/portal') && !path.startsWith('/student') && !path.startsWith('/teacher')) return
         setState({ loading: true, ok: null, user: null })
         try {
-          const res = await fetch(`${API_URL}/api/me`, { credentials: 'include' })
+          const token = localStorage.getItem('drhga-token')
+          const res = await fetch(`${API_URL}/api/me`, {
+            credentials: 'include',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
           if (!mounted) return
           if (!res.ok) {
             if (res.status === 401) {
-              clearSessionAndRedirectHome()
+              clearSessionAndRedirectLogin()
               return
             }
             setState({ loading: false, ok: false, user: null })
@@ -429,7 +489,11 @@ function App() {
           <p>Solo administradores pueden acceder.</p>
         </div>
       )
-      return <AdminDashboard />
+      return (
+        <PanelErrorBoundary>
+          <AdminDashboard />
+        </PanelErrorBoundary>
+      )
     }
     if (path.startsWith('/portal')) {
       if (state.user.role === 'admin') {
@@ -491,6 +555,11 @@ function App() {
       <div className="login-portal">
         <a href="/" className="login-back">← Volver al sitio público</a>
         <Login t={t} onSubmit={handleLogin} />
+        {notice && (
+          <button className="notice" type="button" onClick={() => setNotice('')}>
+            {notice}
+          </button>
+        )}
       </div>
     )
   }
@@ -515,7 +584,7 @@ function App() {
       )}
 
       <main>
-        {page === 'inicio' && <Inicio t={t} lang={lang} goTo={goTo} />}
+        {page === 'inicio' && <Inicio t={t} lang={lang} goTo={goTo} heroImage={heroImage} events={events} />}
         {page === 'nosotros' && <Nosotros t={t} lang={lang} reviews={reviews} session={session} onReview={handleReview} onDeleteReview={deleteReview} />}
         {page === 'servicios' && <Servicios t={t} lang={lang} goTo={goTo} />}
         {page === 'galeria' && <Galeria t={t} lang={lang} gallery={gallery} goTo={goTo} />}
@@ -545,7 +614,6 @@ function Header({ t, pages, page, session, menuOpen, setMenuOpen, goTo, logout }
         </button>
 
         <div className="header-actions">
-          <button className="ghost" type="button" onClick={() => goTo('login')}>{t.nav.ingresar}</button>
           <button className={`nav-toggle ${menuOpen ? 'is-open' : ''}`} type="button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
             <span />
             <span />
@@ -594,7 +662,7 @@ function Login({ t, onSubmit }) {
           </button>
         </div>
         <button className="btn primary" type="submit">{t.login.submit}</button>
-        <small>Admin: admin@drhga.edu.sv / usalacontraseña</small>
+        <small>Usa las credenciales proporcionadas por la administración.</small>
       </form>
     </section>
   )
@@ -901,7 +969,7 @@ function Footer({ t, pages, goTo }) {
       </div>
       <div>
         <h4>CONTACTO</h4>
-        <p>+503 2330-4037<br /><br />escuela.342@clases.edu.sv<br /><br />Lunes a viernes: 7:00 AM - 4:00 PM</p>
+        <p>+503 2330-4037<br /><br />hermogenesalvarado503@gmail.com<br /><br />Lunes a viernes: 7:00 AM - 4:00 PM</p>
       </div>
       <p className="copyright">2026 Centro Escolar Dr. Hermogenes Alvarado. Todos los derechos reservados.</p>
     </footer>
@@ -947,7 +1015,7 @@ function FloatingButtons() {
         <span className="floating-tip">Escríbenos por WhatsApp</span>
         <img src="/img/WhatsAp.png" alt="" />
       </a>
-      <a href="https://mail.google.com/mail/?view=cm&fs=1&to=escuela.342%40clases.edu.sv" target="_blank" rel="noreferrer" aria-label="Gmail" data-tip="Escríbenos por Gmail">
+      <a href="hermogenesalvarado503@gmail.com" target="_blank" rel="noreferrer" aria-label="Gmail" data-tip="Escríbenos por Gmail">
         <span className="floating-tip">Escríbenos por Gmail</span>
         <img src="/img/gmail.jpeg" alt="Logo de Gmail" />
       </a>

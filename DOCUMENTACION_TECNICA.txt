@@ -1,142 +1,191 @@
-DOCUMENTACION TECNICA - SITIO WEB DRHGA
-=======================================
+FICHA TECNICA - SITIO WEB DRHGA
+================================
 
-1. ARQUITECTURA
-El proyecto tiene un frontend React (sitio publico y paneles por rol), una API
-en Node.js y una base de datos PostgreSQL. Docker Compose ejecuta los tres
-servicios: web, api y postgres.
+1. OBJETIVO Y ARQUITECTURA
+Sitio institucional con paginas publicas y paneles privados segun el rol de
+la cuenta. El frontend esta construido con React y se compila con Vite.
 
-El sitio publico incluye Inicio, Nosotros, Servicios, Galeria, Noticias y
-Contacto. Los paneles privados son para admin, teacher, student y user. Ocultar
-el enlace de acceso no protege las rutas: la API valida sesion y rol antes de
-permitir operaciones privadas.
+En la publicacion de Vercel, el recorrido principal es:
+Navegador -> React/Vite -> funciones API de Node.js/Express en /api ->
+Firebase Admin SDK -> Cloud Firestore.
+
+El repositorio tambien conserva un backend PostgreSQL para ejecucion con
+Docker. Es una alternativa separada: no es el mismo backend que usa la API de
+Vercel. Firebase Hosting sirve el contenido estatico y las reglas de Firestore;
+el archivo firebase.json no convierte por si solo /api en funciones Firebase.
 
 2. LENGUAJES Y TECNOLOGIAS
-- JavaScript ES Modules: codigo del frontend y backend.
-- React 19 y React DOM: interfaz por componentes.
-- Vite 8: desarrollo y compilacion del frontend.
-- CSS: estilos y diseno responsivo.
-- Node.js 22: plataforma del servidor.
-- Modulo http nativo de Node.js: servidor y rutas de la API.
-- pg: conexion de Node.js con PostgreSQL.
-- PostgreSQL 16: base de datos.
+- JavaScript moderno con modulos ES: frontend y backend.
+- JSX: sintaxis de componentes React en archivos .jsx.
+- HTML: documento base de la aplicacion.
+- CSS: estilos globales, paginas y paneles responsivos.
+- React 19 y React DOM: componentes e interfaz del navegador.
+- Vite 8: servidor de desarrollo y compilacion de produccion.
+- Node.js: ejecucion de API, herramientas y servidor local.
+- Express y CORS: rutas HTTP y control de solicitudes de la API.
+- Firebase Admin SDK y Cloud Firestore: acceso privado a los datos en la
+  implementacion serverless de Vercel.
+- PostgreSQL y pg: base de datos de la alternativa Docker.
 - GSAP: animaciones de la interfaz publica.
-- Phaser: dependencia disponible para funciones interactivas.
-- ESLint: revision estatica de codigo.
-- Docker y Docker Compose: contenedores y ejecucion integrada.
+- Phaser: dependencia disponible para experiencias interactivas.
+- ESLint: analisis estatico del codigo JavaScript.
+- Docker y Docker Compose: ejecucion local de web, API PostgreSQL y base de
+  datos en contenedores.
 
 3. ESTRUCTURA DEL FRONTEND (/src)
-- main.jsx: punto de entrada; monta React en el elemento root de index.html.
-- App.jsx: componente principal. Controla idioma, pagina activa, menu, sesion,
-  galeria, eventos, resenas, mensajes y llamadas a la API.
-- App.css: estilos globales de la aplicacion publica, formularios, tarjetas,
-  footer, controles y reglas responsivas.
-- index.css: estilos base globales, como desplazamiento suave y reglas para
-  enlaces e imagenes.
-- layouts/RoleHeader.jsx: encabezado reutilizable de vistas por rol.
-- pages/public/: componentes de acceso publico.
-  Inicio.jsx, Nosotros.jsx, Servicios.jsx, Galeria.jsx, Noticias.jsx y
-  Contacto.jsx representan las secciones publicas.
-  PageLayout.jsx reutiliza estructura de pagina.
-  content.js centraliza textos y traducciones en espanol e ingles.
-- pages/admin/: zona administrativa.
-  AdminDashboard.jsx carga y administra galeria, noticias y resenas usando
-  la API. AdminLayout.jsx crea menu lateral y area de trabajo. admin.css
-  contiene los estilos exclusivos del administrador.
-- pages/student/ y pages/teacher/: paneles y estilos propios de estudiante y
-  docente.
-- assets/: recursos importados directamente por React.
+- main.jsx: entrada de React; monta la aplicacion en index.html.
+- App.jsx: componente principal. Define las paginas publicas, menu, idioma,
+  login, validacion de rol, paneles de portal y consumo de la API.
+- App.css e index.css: estilos de la aplicacion y estilos base.
+- components/RoleHeader.jsx: componente sencillo que muestra el rol recibido.
+- assets/: recursos que se importan desde componentes.
+- pages/Usuario/Frontend/: paginas que ve el visitante sin iniciar sesion.
+  Inicio.jsx: portada y avisos destacados.
+  Nosotros.jsx: informacion institucional.
+  Servicios.jsx: servicios del centro.
+  Galeria.jsx: fotografias publicadas.
+  Noticias.jsx: publicaciones con imagen, fecha/hora, titulo y descripcion.
+  Contacto.jsx: formulario para enviar consultas.
+  PageLayout.jsx: estructura y formato de paginas publicas.
+  content.js: etiquetas y textos publicos en espanol e ingles.
+- pages/Usuario/Portales/: paneles y estilos separados de estudiante y docente.
+  StudentDashboard.jsx/StudentLayout.jsx: portada del panel de estudiante.
+  TeacherDashboard.jsx/TeacherLayout.jsx: portada del panel docente.
+  En la aplicacion actual, el portal principal de los roles user, student y
+  teacher se compone tambien desde Dashboard() en App.jsx.
+- pages/Administrador/: panel de administracion.
+  AdminDashboard.jsx: carga y edita portada, galeria, noticias, mensajes y
+  resenas; tambien presenta perfil y opciones de seguridad.
+  AdminLayout.jsx: menu lateral: Dashboard, Portada, Usuarios, Galeria,
+  Noticias, Mensajes, Resenas y Perfil.
+  admin.css: estilos del panel administrativo.
 
-4. OTROS DIRECTORIOS Y ARCHIVOS
-- public/: archivos estaticos. public/img contiene logos y fotografias; se
-  usan como /img/nombre-del-archivo.
-- dist/: resultado de "npm run build". No se edita manualmente.
-- index.html: pagina HTML base de Vite.
-- package.json: dependencias y scripts del frontend.
-- vite.config.js: configuracion de Vite.
-- eslint.config.js: reglas de ESLint.
-- .env: variables de entorno y secretos; no debe subirse a Git.
-- Dockerfile: construye el contenedor web.
-- docker-compose.yml: coordina web, api y PostgreSQL.
+4. ARCHIVOS Y CARPETAS PRINCIPALES
+- public/: archivos estaticos servidos tal cual. public/img/ contiene logos y
+  fotografias; por ejemplo, /img/nombre.jpg.
+- index.html: documento HTML de entrada para Vite.
+- package.json / package-lock.json: dependencias y scripts reproducibles.
+- vite.config.js: configuracion del servidor y compilador Vite.
+- eslint.config.js: reglas de revision estatica.
+- api/index.js: API Express usada por Vercel; contiene autenticacion y rutas
+  de mensajes, resenas, galeria, noticias, configuracion y metricas.
+- api/auth/: utilidades/rutas de autenticacion de la API.
+- firebase.json: destino de Firebase Hosting (dist), reglas y reescritura SPA.
+- .firebaserc: proyecto Firebase seleccionado para comandos de la CLI.
+- firestore.rules: reglas de acceso del cliente a Firestore.
+- vercel.json: compilacion Vite, rewrites SPA y configuracion de rutas API.
+- dist/: resultado generado por npm run build; no editar manualmente.
+- .env* y archivos de credenciales: configuracion privada; no publicar ni
+  incluir en Git o en el paquete del sitio.
 
-5. BACKEND (/server)
-- server/src/server.js: servidor HTTP, rutas, autenticacion, autorizacion,
-  consultas SQL y migracion inicial.
-- server/db/init.sql: crea las tablas y carga datos semilla.
-- server/package.json: dependencias y comandos del backend.
-- server/Dockerfile: imagen Docker de la API.
+5. BACKENDS QUE CONVIVEN EN EL REPOSITORIO
+Implementacion Vercel/Firebase:
+- api/index.js exporta la aplicacion Express para funciones serverless.
+- La API usa variables FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL,
+  FIREBASE_PRIVATE_KEY y, opcionalmente, AUTH_TOKEN_SECRET.
+- Firestore almacena las colecciones users, messages, reviews, gallery,
+  events, siteSettings y otras colecciones usadas por el panel.
+- El proyecto Vercel debe tener sus dependencias de API en el package.json
+  raiz, porque ese es el manifiesto de instalacion de la aplicacion.
 
-Tablas actuales: users, messages, reviews, gallery_items y events.
+Alternativa Docker/PostgreSQL:
+- server/src/server.js: API Express conectada a PostgreSQL.
+- server/src/server-firebase.js y server/src/firebase-admin.js: variante de
+  servidor con Firebase Admin.
+- server/db/init.sql: esquema e inicializacion SQL de PostgreSQL.
+- server/package.json: dependencias y comandos del servidor.
+- server/Dockerfile: imagen del backend.
+- docker-compose.yml: servicios postgres, api y web.
+- Dockerfile raiz: compila el frontend y ejecuta Vite Preview.
 
-6. LOGICA DE AUTENTICACION
-POST /api/auth/login valida correo y contrasena. Las contrasenas se derivan
-con PBKDF2, sal y 120000 iteraciones. La API firma un JWT HMAC SHA-256 y lo
-guarda en la cookie HTTP-only drhga_session, con duracion de 8 horas.
+No mezclar las variables ni las instrucciones de arranque de ambas variantes.
+La configuracion de Docker usa principalmente DATABASE_URL y JWT_SECRET; la
+funcion API de Vercel necesita las credenciales de Firebase indicadas arriba.
 
-GET /api/me devuelve el usuario autenticado. RoleShell en App.jsx consulta
-esta ruta al abrir /admin, /student o /teacher y solo muestra el panel que
-corresponde al rol. El backend vuelve a validar permisos: requireAuth protege
-rutas privadas y requireAdmin protege operaciones administrativas.
+6. PAGINAS, PANELES Y ROLES
+La navegacion publica contiene Inicio, Nosotros, Servicios, Galeria, Noticias
+y Contacto. No requiere cuenta para consultar contenido publico.
 
-7. RUTAS PRINCIPALES DE LA API
-- POST /api/auth/login y POST /api/auth/logout.
-- GET /api/me.
-- GET, POST, PUT y DELETE /api/gallery (escritura: admin).
-- GET, POST, PUT y DELETE /api/events (escritura: admin).
-- GET, POST y DELETE /api/reviews (eliminar: admin).
-- POST /api/messages; GET y DELETE /api/messages (admin).
-- GET /api/me/messages (usuario autenticado).
-- GET /api/health y GET /api-docs.
+El acceso se inicia desde "Ingresar" y el servidor determina el panel segun
+el rol. Los roles reconocidos por la interfaz son admin, user, student y
+teacher. /admin requiere admin. /portal muestra el portal de los otros roles.
+Las rutas /student y /teacher tambien existen, pero sus componentes separados
+son actualmente pantallas introductorias sencillas.
 
-La raiz de la API ofrece Swagger UI. Los roles definidos son admin, user,
-student y teacher.
+El usuario y el docente ven perfil y mensajes; sus pestañas adicionales son
+informativas. El estudiante ve el panel de avisos y actividades. El docente
+puede ver algunos eventos recientes en el portal compartido. El administrador
+gestiona contenido publico desde el menu lateral descrito en la seccion 3.
 
-8. DOCKER
-docker-compose.yml declara:
-- postgres: postgres:16-alpine, volumen drhga_postgres e inicializacion desde
-  server/db/init.sql.
-- api: se construye desde server/Dockerfile y escucha en el puerto 4000.
-- web: se construye desde el Dockerfile raiz, compila React y ejecuta Vite
-  Preview en el puerto 4173 interno.
+7. CONTENIDO ADMINISTRABLE
+- Portada: permite elegir una imagen local o pegar su URL y guardar la imagen
+  principal del Inicio.
+- Galeria: titulo, descripcion, imagen, lugar, fecha, hora y orden. La imagen
+  aparece en la pagina publica Galeria.
+- Noticias: titulo, descripcion, imagen local o URL, ubicacion y fecha/hora;
+  permite marcar un aviso importante. Al guardar, aparece como tarjeta en la
+  pagina publica Noticias. La pagina muestra imagen, fecha/hora, titulo,
+  descripcion y, si existe, tema, aviso importante y ubicacion.
+- Mensajes: lista consultas enviadas desde Contacto. El panel ofrece enlaces
+  para responder por correo o WhatsApp y acciones de administracion.
+- Resenas: lista resenas aprobadas visibles al publico; el panel permite
+  eliminarlas.
+- Usuarios: en el panel actual es una seccion informativa; no permite crear
+  cuentas ni cambiar roles.
 
-Comando de arranque:
-  docker compose up -d --build
+La seleccion de una imagen local en Portada, Galeria o Noticias acepta JPG,
+PNG o WebP desde el control visual. Se rechazan archivos de mas de 10 MB y la
+imagen se redimensiona/comprime a JPEG antes de guardarse como dato de imagen
+en Firestore; no se sube a Firebase Storage en este flujo.
 
-Comandos utiles:
-  docker compose ps
-  docker compose logs -f api
-  docker compose down
+8. RUTAS PRINCIPALES DE LA API VERCEL
+- POST /api/auth/login; GET /api/me; POST /api/auth/logout.
+- GET/POST /api/messages; DELETE /api/messages/:id.
+- GET/POST /api/reviews; DELETE /api/reviews/:id.
+- GET/POST /api/gallery; PUT/DELETE /api/gallery/:id.
+- GET/POST /api/events; PUT/DELETE /api/events/:id.
+- GET/PUT /api/site-settings.
+- GET /api/analytics y GET /api/health.
 
-Variables: POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, DATABASE_URL,
-JWT_SECRET, CORS_ORIGIN, API_PORT, WEB_PORT y VITE_API_URL. Los puertos por
-defecto del compose actual son 4173 para web y 4000 para la API.
+Las operaciones de escritura administrativa requieren sesion de admin. Las
+rutas publicas de lectura se usan para presentar el contenido del sitio.
 
-9. EJECUCION LOCAL
-Frontend:
+9. DESARROLLO Y COMPILACION
+Desde la raiz del proyecto:
   npm install
   npm run dev
   npm run build
   npm run lint
 
-Backend, desde /server:
-  npm install
-  npm run dev
+Para Docker:
+  docker compose up -d --build
+  docker compose ps
+  docker compose logs -f api
+  docker compose down
 
-Se necesita una base PostgreSQL accesible mediante DATABASE_URL. En Windows,
-si PowerShell bloquea npm.ps1, use: npm.cmd run build
+Vercel compila con npm run build y publica dist junto con las funciones de
+api/. Firebase Hosting publica el directorio dist y puede desplegar las reglas
+de firestore.rules. Hosting por si solo no publica api/index.js.
 
-10. SEGURIDAD Y PRODUCCION
-- Cambiar JWT_SECRET, contrasenas de base de datos y cuentas de prueba.
-- No publicar .env ni CREDENCIALES_ADMIN.txt.
-- Usar HTTPS y agregar el atributo Secure a la cookie en produccion.
-- Configurar CORS_ORIGIN con el dominio exacto; no usar *.
-- Implementar limite de intentos de login, auditoria, respaldos, recuperacion
-  segura de contrasena y doble factor para administradores.
-- El formulario de acceso puede ir en /acceso o portal.dominio.edu.sv y no
-  aparecer en el sitio publico, pero esto complementa, no sustituye, la
-  autorizacion de la API.
+10. LIMITACIONES CONOCIDAS
+- La seccion Usuarios del panel administrativo aun no gestiona cuentas.
+- AdminDashboard no ofrece actualmente un boton visible para cerrar la sesion.
+- El endpoint actual de analitica entrega contadores generales; los graficos
+  detallados que dibuja el Dashboard tienen datos de ejemplo o valores cero y
+  no deben interpretarse como estadisticas reales.
+- Algunas acciones visibles en Perfil/Mensajes dependen de rutas adicionales
+  que no estan implementadas en api/index.js. Verificar su funcionamiento en
+  el despliegue antes de usarlas como proceso institucional.
+- El cambio de contrasena y envio de correo requieren configurar correctamente
+  el servicio de correo y las variables privadas del servidor.
 
-11. MANTENIMIENTO
-Antes de actualizar, respalde la base de datos. Pruebe build/lint, revise los
-logs y verifique la pagina publica, login, permisos por rol, noticias,
-galeria, resenas y cierre de sesion.
+11. SEGURIDAD Y RESPALDOS
+- Nunca publicar .env, CREDENCIALES_ADMIN.txt, claves privadas, tokens ni
+  archivos JSON de cuentas de servicio.
+- Guardar secretos solo como variables privadas del entorno de despliegue.
+- Restringir roles y permisos en la API y revisar firestore.rules antes de
+  publicar cambios.
+- No enviar contrasenas por correo o mensajeria. Usar HTTPS y cuentas
+  individuales para administradores.
+- Respaldar los datos antes de cambios importantes y probar inicio de sesion,
+  permisos, noticias, galeria y formularios despues de cada despliegue.

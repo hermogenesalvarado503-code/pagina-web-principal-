@@ -1,59 +1,108 @@
 GUIA DEL ADMINISTRADOR - SITIO WEB DRHGA
-=========================================
+========================================
 
-PROPOSITO
-El panel de administracion permite mantener el contenido visible en el sitio
-publico. Solo debe utilizarse con una cuenta cuyo rol sea "admin".
+El panel permite actualizar contenido que se presenta en las paginas publicas.
+Solo debe utilizarse con una cuenta autorizada cuyo rol sea "admin".
 
-INGRESO SEGURO
-1. Entre por la direccion privada del portal definida por la institucion.
-2. Inicie sesion con el correo y contrasena de administrador.
-3. Verifique que aparezca el panel de Administracion.
-4. Al finalizar, presione "Salir".
+1. INGRESAR Y SALIR
+1. Abra la direccion del sitio institucional y presione "Ingresar". Si la
+   institucion le dio un enlace directo al acceso, tambien puede usarlo.
+2. Escriba el correo y la contrasena de administrador.
+3. Al validar el rol, se abre el panel de administracion.
+4. El panel administrativo actual no muestra un boton "Salir". Evite usarlo
+   en equipos compartidos y cierre el navegador al terminar. Cerrar la ventana
+   no revoca de inmediato el token de sesion; solicite al personal tecnico un
+   mecanismo de cierre de sesion si necesita invalidarlo.
 
-No comparta la cuenta administradora. Debe crearse una cuenta individual para
-cada persona responsable. En produccion se recomienda activar doble factor y
-cambiar las credenciales de prueba antes de publicar el sistema.
+No comparta la cuenta. Solicite cuentas individuales al personal tecnico. No
+envie contrasenas ni claves de servicio por correo o mensajeria.
 
-SECCIONES DEL PANEL
+2. MENU DEL PANEL
+- Dashboard: resumen y accesos rapidos para crear una foto o noticia.
+- Portada: cambia la imagen principal que aparece en Inicio.
+- Usuarios: por ahora es una seccion informativa; no crea cuentas ni cambia
+  roles.
+- Galeria: publica y organiza fotografias en la pagina Galeria.
+- Noticias: crea avisos y actividades que se muestran en la pagina Noticias.
+- Mensajes: consulta formularios enviados desde Contacto.
+- Resenas: consulta resenas aprobadas que aparecen en el sitio publico.
+- Perfil: muestra opciones de perfil, seguridad y conexion de correo. Algunas
+  acciones requieren que el servicio de correo y la API esten configurados.
 
-Dashboard
-- Muestra un resumen de galeria, resenas y noticias.
-- Incluye accesos para crear una foto o una noticia nueva.
+3. PUBLICAR UNA NOTICIA CON IMAGEN
+1. En el menu lateral, abra "Noticias" y presione "Agregar noticia". Tambien
+   puede usar "Agregar noticia nueva" desde el Dashboard.
+2. Complete "Tema principal" con el titulo que se vera en la publicacion.
+3. Escriba el contenido y motivo de la actividad en el campo de descripcion.
+4. Para agregar una imagen, elija un archivo JPG, PNG o WebP del dispositivo.
+   El panel muestra una vista previa y optimiza la imagen antes de guardarla.
+   Tambien puede pegar una URL de imagen en lugar de seleccionar un archivo.
+5. Complete ubicacion, fecha y hora. Estos campos pueden quedar vacios, pero
+   se recomienda llenarlos para que las familias sepan donde y cuando ocurrio
+   la actividad.
+6. Si corresponde, marque "Mostrar como aviso importante en Inicio".
+7. Revise la vista previa y presione "Guardar". Espere el mensaje de
+   confirmacion antes de cerrar el formulario.
+8. Abra la pagina publica "Noticias" para verificar la imagen, titulo,
+   descripcion, fecha/hora y ubicacion. Los cambios pueden tardar unos
+   segundos en reflejarse.
 
-Galeria
-- Agregar foto nueva: escriba titulo, descripcion, URL de imagen y orden.
-- Editar: actualiza los datos de una imagen existente.
-- Eliminar: borra el registro de la galeria. Confirme que sea la imagen
-  correcta antes de usarlo.
-- El campo orden controla la posicion de la foto en la galeria publica.
+El archivo seleccionado debe tener menos de 10 MB. El sistema lo reduce y lo
+convierte a JPEG para guardarlo con la publicacion. No se necesita copiar una
+ruta del disco. Si usa URL, compruebe que sea publica y que la imagen abra sin
+iniciar sesion.
 
-Noticias
-- Agregar noticia nueva: crea una publicacion o evento.
-- Editar: permite cambiar titulo, encabezado de noticia, descripcion, imagen,
-  ubicacion, fecha, hora y mapa opcional.
-- Eliminar: elimina la publicacion seleccionada.
-- Use una imagen con URL valida y verifique en el sitio publico que se vea.
-- La fecha se registra como AAAA-MM-DD y la hora como HH:MM.
+Para corregir una publicacion, vuelva a "Noticias", presione "Editar" en la
+tarjeta correspondiente, cambie los campos y guarde. "Eliminar" borra la
+publicacion; confirme el titulo antes de hacerlo, porque no hay papelera en el
+panel.
 
-Resenas
-- Muestra las resenas publicadas.
-- Recargar resenas actualiza la lista.
-- Eliminar borra una resena. Esta operacion no tiene papelera en la aplicacion;
-  antes de hacerlo confirme que corresponde a contenido inapropiado.
+4. ACTUALIZAR LA PORTADA
+1. Abra "Portada".
+2. Seleccione una imagen JPG, PNG o WebP, o pegue su URL.
+3. Revise la vista previa y presione "Guardar portada".
+4. Visite Inicio para verificar el resultado.
 
-Usuarios
-- Actualmente es una seccion informativa. La gestion completa de altas,
-  bajas, roles y restablecimiento de contrasenas requiere una ampliacion del
-  sistema y debe realizarla personal tecnico.
+5. ADMINISTRAR LA GALERIA
+1. Abra "Galeria" y presione "Agregar publicacion".
+2. Escriba el tema, la descripcion y el lugar donde se realizo la actividad.
+3. Seleccione una imagen o pegue su URL. La vista previa permite revisar la
+   fotografia antes de guardar.
+4. Complete fecha y hora, y ajuste el orden si necesita organizar la galeria.
+5. Presione "Guardar" y confirme el resultado en la pagina publica Galeria.
 
-MENSAJES Y PUBLICACION
-Revise los mensajes recibidos y los datos antes de eliminar registros. Revise
-ortografia, fecha, hora y ubicacion antes de guardar una noticia. No publique
-datos de menores sin autorizacion institucional. Mantenga una copia externa de
-las imagenes y publicaciones importantes.
+Use "Editar" para corregir una foto. "Eliminar" borra el registro y no tiene
+papelera. Mantenga una copia institucional de las imagenes originales.
 
-SOPORTE
-Solicite apoyo si no puede iniciar sesion, una imagen no carga, los datos no
-se guardan, aparece "No autorizado", o necesita crear o modificar cuentas.
-Indique la accion realizada y el error observado; nunca envie contrasenas.
+6. MENSAJES Y RESENAS
+Mensajes: revise el nombre, correo, asunto y contenido. Puede iniciar una
+respuesta por correo o WhatsApp desde los botones disponibles. Eliminar quita
+el mensaje del sistema. Algunas acciones de estado pueden no guardarse mientras
+la API desplegada no tenga disponible la ruta correspondiente.
+
+Resenas: la lista muestra resenas aprobadas. Puede recargarla o eliminar una
+resena. Antes de eliminar, revise cuidadosamente el contenido; no hay papelera.
+
+7. CUENTAS Y SEGURIDAD
+La seccion "Usuarios" no esta implementada para crear, editar o desactivar
+cuentas. Solicite esas operaciones al personal tecnico autorizado.
+
+En "Perfil" puede aparecer el formulario de cambio de contrasena con codigo de
+verificacion por correo. Su disponibilidad depende de que la API y el servicio
+de correo esten configurados. El codigo temporal no debe compartirse.
+
+No publique datos personales de estudiantes sin autorizacion institucional.
+Revise ortografia, fechas, ubicaciones y permisos de uso de imagen antes de
+publicar. No comparta contrasenas, tokens, archivos de credenciales ni claves
+privadas.
+
+8. SOLUCION DE PROBLEMAS
+- Si aparece "No autorizado", confirme que inicio sesion con una cuenta admin.
+- Si la imagen no carga, use un archivo permitido o compruebe que la URL sea
+  publica y correcta.
+- Si no aparece el mensaje de guardado, revise la conexion e intente de nuevo.
+- Si las metricas del Dashboard muestran cero o cifras que no coinciden, no
+  las use como reporte oficial: las graficas detalladas aun no estan conectadas
+  a datos completos de visitas.
+- Para solicitar soporte, indique la seccion, la accion realizada y el error.
+  Nunca envie la contrasena.

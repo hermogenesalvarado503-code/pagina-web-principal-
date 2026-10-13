@@ -8,7 +8,7 @@ const stats = [
   ['98%', 'Satisfacción de padres'],
 ]
 
-export default function Inicio({ t, goTo }) {
+export default function Inicio({ t, goTo, heroImage, events = [] }) {
   const heroRef = useRef(null)
   const eyebrowRef = useRef(null)
   const titleRef = useRef(null)
@@ -125,9 +125,31 @@ export default function Inicio({ t, goTo }) {
           </div>
         </div>
         <div className="hero-media" ref={mediaRef}>
-          <img src="/img/hermogenes.jpeg" alt="Fachada del Centro Escolar" />
+          <img src={heroImage || '/img/hermogenes.jpeg'} alt="Imagen principal del Centro Escolar" />
         </div>
       </section>
+
+      {events.some((event) => event.is_important || event.isImportant) && (
+        <section className="section notice-board" aria-labelledby="notice-board-title">
+          <div className="section-heading">
+            <p className="eyebrow">Comunicados</p>
+            <h2 id="notice-board-title">Avisos importantes</h2>
+          </div>
+          <div className="important-notices">
+            {events.filter((event) => event.is_important || event.isImportant).slice(0, 3).map((event) => (
+              <article className="important-notice" key={event.id}>
+                {event.image_url && <img src={event.image_url} alt="" />}
+                <div>
+                  <small>{event.event_date ? new Date(`${event.event_date}T00:00:00`).toLocaleDateString('es-SV') : 'Comunicado escolar'}</small>
+                  <h3>{event.title}</h3>
+                  <p>{event.description}</p>
+                  {event.location && <small>📍 {event.location}</small>}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="hero-info">
         <span>📍 Avenida El Progreso No. 2, Barrio San Juan, Santiago Nonualco</span>
@@ -156,6 +178,19 @@ export default function Inicio({ t, goTo }) {
         </div>
         <div className="descripcion escolar">
           <h1></h1>
+        </div>
+      </section>
+
+      <section className="section grades-section">
+        <div className="section-heading">
+          <p className="eyebrow">Oferta académica</p>
+          <h2>Grados que acompañamos</h2>
+          <p>Una trayectoria escolar organizada por ciclos, desde primer grado hasta noveno.</p>
+        </div>
+        <div className="grade-cycles">
+          <article><h3>Primer ciclo</h3><p>1.º · 2.º · 3.º grado</p></article>
+          <article><h3>Segundo ciclo</h3><p>4.º · 5.º · 6.º grado</p></article>
+          <article><h3>Tercer ciclo</h3><p>7.º · 8.º · 9.º grado</p></article>
         </div>
       </section>
      

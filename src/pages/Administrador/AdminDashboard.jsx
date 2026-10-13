@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AdminLayout from './AdminLayout'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
@@ -68,10 +68,31 @@ function jsonResponse(res) {
   })
 }
 
+function serializeFirestoreValue(value) {
+  if (Array.isArray(value)) return value.map(serializeFirestoreValue)
+  if (!value || typeof value !== 'object') return value
+
+  if (typeof value._seconds === 'number') {
+    return new Date(value._seconds * 1000 + Math.floor((value._nanoseconds || 0) / 1e6)).toISOString()
+  }
+
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, serializeFirestoreValue(entry)]))
+}
+
 function formatEventDate(value) {
   if (!value) return 'Sin fecha'
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('es-SV')
+}
+
+function formatGalleryDate(value) {
+  if (!value) return 'Pendiente de completar'
+  const date = new Date(`${String(value).slice(0, 10)}T12:00:00`)
+  return Number.isNaN(date.getTime()) ? 'Pendiente de completar' : date.toLocaleDateString('es-SV')
+}
+
+function formatGalleryTime(value) {
+  return value ? String(value).slice(0, 5) : 'Pendiente de completar'
 }
 
 function dateInputValue(value) {
@@ -80,6 +101,39 @@ function dateInputValue(value) {
 
 function timeInputValue(value) {
   return value ? String(value).slice(0, 5) : ''
+}
+
+async function imageFileToDataUrl(file) {
+  if (!file?.type?.startsWith('image/')) throw new Error('Selecciona una imagen válida.')
+  if (file.size > 10 * 1024 * 1024) throw new Error('La imagen no puede superar 10 MB.')
+
+  const source = URL.createObjectURL(file)
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const element = new Image()
+      element.onload = () => resolve(element)
+      element.onerror = () => reject(new Error('No se pudo leer la imagen seleccionada.'))
+      element.src = source
+    })
+    let maxDimension = 1400
+    let quality = 0.78
+    let dataUrl = ''
+    while (maxDimension >= 700) {
+      const scale = Math.min(1, maxDimension / Math.max(image.width, image.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(image.width * scale))
+      canvas.height = Math.max(1, Math.round(image.height * scale))
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height)
+      dataUrl = canvas.toDataURL('image/jpeg', quality)
+      if (dataUrl.length <= 850 * 1024) break
+      maxDimension = Math.floor(maxDimension * 0.8)
+      quality = Math.max(0.55, quality - 0.06)
+    }
+    if (dataUrl.length > 850 * 1024) throw new Error('La imagen sigue siendo muy grande. Usa una imagen de menor resolución.')
+    return dataUrl
+  } finally {
+    URL.revokeObjectURL(source)
+  }
 }
 
 function replyEmailLink(message) {
@@ -118,6 +172,44 @@ function formatDeviceLabel(label) {
   return label || 'Desconocido'
 }
 
+function normalizeAnalytics(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return defaultAnalytics
+
+  return {
+    ...defaultAnalytics,
+    ...value,
+    summary: { ...defaultAnalytics.summary, ...(value.summary || {}) },
+    monthlyTrend: Array.isArray(value.monthlyTrend) ? value.monthlyTrend : defaultAnalytics.monthlyTrend,
+    hourlyTraffic: Array.isArray(value.hourlyTraffic) ? value.hourlyTraffic : defaultAnalytics.hourlyTraffic,
+    deviceStats: Array.isArray(value.deviceStats) ? value.deviceStats : defaultAnalytics.deviceStats,
+    dailyTraffic: Array.isArray(value.dailyTraffic) ? value.dailyTraffic : defaultAnalytics.dailyTraffic,
+    trafficSources: Array.isArray(value.trafficSources) ? value.trafficSources : defaultAnalytics.trafficSources,
+    topPages: Array.isArray(value.topPages) ? value.topPages : defaultAnalytics.topPages,
+  }
+}
+
+function normalizeGalleryItem(item) {
+  return {
+    ...item,
+    image_url: item.image_url || item.imageUrl || '',
+    location: item.location || '',
+    event_date: item.event_date || item.eventDate || '',
+    event_time: item.event_time || item.eventTime || '',
+    sort_order: item.sort_order ?? item.sortOrder ?? 0,
+  }
+}
+
+function normalizeEventItem(item) {
+  return {
+    ...item,
+    image_url: item.image_url || item.imageUrl || '',
+    event_date: item.event_date || item.eventDate || '',
+    event_time: item.event_time || item.eventTime || '',
+    map_iframe: item.map_iframe || item.mapIframe || '',
+    is_important: item.is_important ?? item.isImportant ?? false,
+  }
+}
+
 // Validar contraseña: mínimo 8 caracteres, mayúscula, minúscula, número y carácter especial
 function validatePassword(password) {
   const errors = []
@@ -133,11 +225,14 @@ export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState('overview')
   const [gallery, setGallery] = useState([])
   const [events, setEvents] = useState([])
+  const [heroImageDraft, setHeroImageDraft] = useState('')
   const [reviews, setReviews] = useState([])
   const [messages, setMessages] = useState([])
   const [reviewNeedsReload, setReviewNeedsReload] = useState(false)
   const [editingGallery, setEditingGallery] = useState(null)
   const [editingEvent, setEditingEvent] = useState(null)
+  const [imageDraft, setImageDraft] = useState('')
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(true)
   const [analyticsView, setAnalyticsView] = useState('resumen')
@@ -151,35 +246,40 @@ export default function AdminDashboard() {
   const [otpTimeLeft, setOtpTimeLeft] = useState(300) // 5 minutos
   const [passwordHistory, setPasswordHistory] = useState([])
   const [accessLogs, setAccessLogs] = useState([])
+  const [gmailOAuth, setGmailOAuth] = useState({ configured: false, connected: false, sender: null })
+  const contentFormRef = useRef(null)
 
   const compactMonthlyTrend = (analytics?.monthlyTrend || []).slice(-5)
+  const authHeaders = () => {
+    const token = localStorage.getItem('drhga-token')
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [galleryRes, eventsRes, reviewsRes, messagesRes, analyticsRes] = await Promise.all([
-          fetch(`${API_URL}/api/gallery`, { credentials: 'include' }),
-          fetch(`${API_URL}/api/events`, { credentials: 'include' }),
-          fetch(`${API_URL}/api/reviews`, { credentials: 'include' }),
-          fetch(`${API_URL}/api/messages`, { credentials: 'include' }),
-          fetch(`${API_URL}/api/analytics`, { credentials: 'include' }),
+        const [galleryRes, eventsRes, reviewsRes, messagesRes, analyticsRes, settingsRes] = await Promise.all([
+          fetch(`${API_URL}/api/gallery`, { credentials: 'include', headers: authHeaders() }),
+          fetch(`${API_URL}/api/events`, { credentials: 'include', headers: authHeaders() }),
+          fetch(`${API_URL}/api/reviews`, { credentials: 'include', headers: authHeaders() }),
+          fetch(`${API_URL}/api/messages`, { credentials: 'include', headers: authHeaders() }),
+          fetch(`${API_URL}/api/analytics`, { credentials: 'include', headers: authHeaders() }),
+          fetch(`${API_URL}/api/site-settings`, { credentials: 'include', headers: authHeaders() }),
         ])
-        const [galleryData, eventsData, reviewsData, messagesData, analyticsData] = await Promise.all([
+        const [galleryData, eventsData, reviewsData, messagesData, analyticsData, settingsData] = await Promise.all([
           jsonResponse(galleryRes),
           jsonResponse(eventsRes),
           jsonResponse(reviewsRes),
           jsonResponse(messagesRes),
           analyticsRes.ok ? jsonResponse(analyticsRes) : null,
+          settingsRes.ok ? jsonResponse(settingsRes) : {},
         ])
-        setGallery(galleryData || [])
-        setEvents(eventsData || [])
-        setReviews(reviewsData || [])
-        setMessages(messagesData || [])
-        setAnalytics(
-          analyticsData && typeof analyticsData === 'object' && Object.keys(analyticsData).length
-            ? analyticsData
-            : defaultAnalytics,
-        )
+        setGallery(Array.isArray(galleryData) ? galleryData.map(serializeFirestoreValue).map(normalizeGalleryItem) : [])
+        setEvents(Array.isArray(eventsData) ? eventsData.map(serializeFirestoreValue).map(normalizeEventItem) : [])
+        setReviews(Array.isArray(reviewsData) ? reviewsData.map(serializeFirestoreValue) : [])
+        setMessages(Array.isArray(messagesData) ? messagesData.map(serializeFirestoreValue) : [])
+        setAnalytics(normalizeAnalytics(serializeFirestoreValue(analyticsData)))
+        setHeroImageDraft(settingsData.heroImageUrl || '')
       } catch (error) {
         setNotice('No se pudo cargar datos de administración.')
       } finally {
@@ -192,7 +292,7 @@ export default function AdminDashboard() {
   async function request(path, options = {}) {
     const res = await fetch(`${API_URL}${path}`, {
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       ...options,
     })
     if (!res.ok) {
@@ -202,17 +302,40 @@ export default function AdminDashboard() {
     return jsonResponse(res)
   }
 
+  async function loadGmailOAuthStatus() {
+    try {
+      setGmailOAuth(await request('/api/auth/gmail-oauth-status'))
+    } catch (error) {
+      setNotice(error.message)
+    }
+  }
+
+  async function connectGmailOAuth() {
+    try {
+      const result = await request('/api/auth/gmail-oauth-url')
+      window.location.assign(result.url)
+    } catch (error) {
+      setNotice(error.message)
+    }
+  }
+
+  useEffect(() => {
+    loadGmailOAuthStatus()
+  }, [])
+
   async function saveGalleryItem(payload) {
     try {
       const result = await request(editingGallery ? `/api/gallery/${editingGallery.id}` : '/api/gallery', {
         method: editingGallery ? 'PUT' : 'POST',
         body: JSON.stringify(payload),
       })
+      const saved = normalizeGalleryItem(result)
       setGallery((current) => {
-        if (editingGallery) return current.map((item) => (item.id === result.id ? result : item))
-        return [result, ...current]
+        if (editingGallery) return current.map((item) => (item.id === saved.id ? saved : item))
+        return [saved, ...current]
       })
       setEditingGallery(null)
+      setImageDraft('')
       setNotice('Galería guardada correctamente.')
     } catch (error) {
       setNotice(error.message)
@@ -225,12 +348,27 @@ export default function AdminDashboard() {
         method: editingEvent ? 'PUT' : 'POST',
         body: JSON.stringify(payload),
       })
+      const saved = normalizeEventItem(result)
       setEvents((current) => {
-        if (editingEvent) return current.map((item) => (item.id === result.id ? result : item))
-        return [result, ...current]
+        if (editingEvent) return current.map((item) => (item.id === saved.id ? saved : item))
+        return [saved, ...current]
       })
       setEditingEvent(null)
+      setImageDraft('')
       setNotice('Noticia guardada correctamente.')
+    } catch (error) {
+      setNotice(error.message)
+    }
+  }
+
+  async function saveHeroImage() {
+    try {
+      const result = await request('/api/site-settings', {
+        method: 'PUT',
+        body: JSON.stringify({ heroImageUrl: heroImageDraft }),
+      })
+      setHeroImageDraft(result.heroImageUrl || '')
+      setNotice('Imagen principal actualizada.')
     } catch (error) {
       setNotice(error.message)
     }
@@ -277,9 +415,42 @@ export default function AdminDashboard() {
     }
   }
 
+  async function updateMessageStatus(id, status) {
+    try {
+      const result = await request(`/api/messages/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      })
+      setMessages((current) => current.map((message) => (message.id === id ? result : message)))
+      setNotice(status === 'resolved' ? 'Mensaje marcado como atendido.' : 'Mensaje marcado como nuevo.')
+    } catch (error) {
+      setNotice(error.message)
+    }
+  }
+
+  function openGalleryForm(item = null) {
+    setActiveSection('gallery')
+    setEditingEvent(null)
+    setEditingGallery(item || { title: '', description: '', image_url: '', location: '', event_date: '', event_time: '', sort_order: 0 })
+    setImageDraft(item?.image_url || '')
+  }
+
+  function openEventForm(item = null) {
+    setActiveSection('events')
+    setEditingGallery(null)
+    setEditingEvent(item || { title: '', news: '', topic: '', description: '', event_date: '', event_time: '', image_url: '', location: '', map_iframe: '', is_important: false })
+    setImageDraft(item?.image_url || '')
+  }
+
+  useEffect(() => {
+    if (editingGallery || editingEvent) {
+      requestAnimationFrame(() => contentFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    }
+  }, [editingGallery, editingEvent])
+
   async function refreshReviews() {
     try {
-      const res = await fetch(`${API_URL}/api/reviews`, { credentials: 'include' })
+      const res = await fetch(`${API_URL}/api/reviews`, { credentials: 'include', headers: authHeaders() })
       const reviewsData = await jsonResponse(res)
       setReviews(reviewsData || [])
       setReviewNeedsReload(false)
@@ -329,13 +500,13 @@ export default function AdminDashboard() {
     }
 
     try {
-      await request('/api/auth/validate-password-change', {
+      const result = await request('/api/auth/validate-password-change', {
         method: 'POST',
         body: JSON.stringify({ token: passwordChangeToken, otpCode }),
       })
       setPasswordChangeStep('success')
       setPasswordErrors([])
-      setNotice('Contraseña cambiada correctamente.')
+      setNotice(result.message || 'Contraseña cambiada correctamente.')
       
       // Resetear después de 3 segundos
       setTimeout(() => {
@@ -393,13 +564,13 @@ export default function AdminDashboard() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
             <h2>Panel de Administración</h2>
-            <p>{activeSection === 'overview' ? 'Resumen de administración de contenidos.' : activeSection === 'users' ? 'Gestión de usuarios en desarrollo.' : activeSection === 'gallery' ? 'Gestiona la galería visible en el sitio.' : activeSection === 'events' ? 'Gestiona noticias y eventos.' : activeSection === 'messages' ? 'Consulta y responde los mensajes recibidos desde Contáctanos.' : activeSection === 'reviews' ? 'Gestiona reseñas aprobadas.' : 'Administra tu perfil y seguridad.'}</p>
+            <p>{activeSection === 'overview' ? 'Resumen de administración de contenidos.' : activeSection === 'home' ? 'Actualiza la imagen principal del sitio.' : activeSection === 'users' ? 'Gestión de usuarios en desarrollo.' : activeSection === 'gallery' ? 'Gestiona las publicaciones visibles en el sitio.' : activeSection === 'events' ? 'Gestiona noticias y eventos.' : activeSection === 'messages' ? 'Consulta y responde los mensajes recibidos desde Contáctanos.' : activeSection === 'reviews' ? 'Gestiona reseñas aprobadas.' : 'Administra tu perfil y seguridad.'}</p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn primary" type="button" onClick={() => { setEditingGallery({ title: '', description: '', image_url: '', sort_order: 0 }); setEditingEvent(null) }}>
+            <button className="btn primary" type="button" onClick={() => openGalleryForm()}>
               Agregar foto nueva
             </button>
-            <button className="btn secondary" type="button" onClick={() => { setEditingEvent({ title: '', news: '', description: '', event_date: '', event_time: '', image_url: '', location: '', map_iframe: '' }); setEditingGallery(null) }}>
+            <button className="btn secondary" type="button" onClick={() => openEventForm()}>
               Agregar noticia nueva
             </button>
           </div>
@@ -599,6 +770,9 @@ export default function AdminDashboard() {
                         <div>
                           <h4>{item.title}</h4>
                           <p>{item.description}</p>
+                          <small>Fecha: {formatGalleryDate(item.event_date)}</small>
+                          <small>Hora: {formatGalleryTime(item.event_time)}</small>
+                          <small>Ubicación: {item.location || 'Pendiente de completar'}</small>
                           <small>Orden: {item.sort_order}</small>
                         </div>
                       </article>
@@ -666,11 +840,49 @@ export default function AdminDashboard() {
               </section>
             )}
 
+            {activeSection === 'home' && (
+              <section>
+                <div className="section-heading">
+                  <p className="eyebrow">Inicio</p>
+                  <h3>Imagen principal</h3>
+                </div>
+                <form className="panel-form" onSubmit={(event) => { event.preventDefault(); saveHeroImage() }}>
+                  <label htmlFor="hero_image_file"><strong>Foto de portada</strong></label>
+                  <input
+                    id="hero_image_file"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={async (event) => {
+                      const file = event.target.files?.[0]
+                      if (!file) return
+                      try {
+                        setUploadingImage(true)
+                        setHeroImageDraft(await imageFileToDataUrl(file))
+                        setNotice('Imagen lista para guardar.')
+                      } catch (error) {
+                        event.target.value = ''
+                        setNotice(error.message)
+                      } finally {
+                        setUploadingImage(false)
+                      }
+                    }}
+                  />
+                  <label htmlFor="hero_image_url">O pega una URL de imagen</label>
+                  <input id="hero_image_url" value={heroImageDraft.startsWith('data:') ? '' : heroImageDraft} onChange={(event) => setHeroImageDraft(event.target.value)} placeholder="https://ejemplo.com/foto.jpg" />
+                  {heroImageDraft && <img src={heroImageDraft} alt="Vista previa de la portada" style={{ width: '100%', maxWidth: 480, maxHeight: 280, objectFit: 'cover', borderRadius: 8 }} />}
+                  <button className="btn primary" type="submit" disabled={uploadingImage}>{uploadingImage ? 'Preparando imagen…' : 'Guardar portada'}</button>
+                </form>
+              </section>
+            )}
+
             {activeSection === 'gallery' && (
               <section>
                 <div className="section-heading">
                   <p className="eyebrow">Galería</p>
-                  <h3>Fotos y recursos visuales</h3>
+                  <h3>Publicaciones escolares</h3>
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <button className="btn primary" type="button" onClick={() => openGalleryForm()}>Agregar publicación</button>
                 </div>
                 <div className="admin-list" style={{ display: 'grid', gap: 12 }}>
                   {gallery.length === 0 ? (
@@ -681,10 +893,13 @@ export default function AdminDashboard() {
                       <div>
                         <h4>{item.title}</h4>
                         <p>{item.description}</p>
+                        <small>Fecha: {formatGalleryDate(item.event_date)}</small>
+                        <small>Hora: {formatGalleryTime(item.event_time)}</small>
+                        <small>Ubicación: {item.location || 'Pendiente de completar'}</small>
                         <small>Orden: {item.sort_order}</small>
                       </div>
                       <div style={{ display: 'grid', gap: 8 }}>
-                        <button className="btn secondary" type="button" onClick={() => { setEditingGallery(item); setEditingEvent(null) }}>
+                        <button className="btn secondary" type="button" onClick={() => openGalleryForm(item)}>
                           Editar
                         </button>
                         <button className="danger" type="button" onClick={() => deleteGalleryItem(item.id)}>
@@ -743,6 +958,28 @@ export default function AdminDashboard() {
             {activeSection === 'profile' && (
               <section style={{ maxWidth: '900px' }}>
                 <div style={{ display: 'grid', gap: 24 }}>
+                  <div style={{ padding: 20, background: 'white', borderRadius: 12, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                    <div className="section-heading">
+                      <div>
+                        <p className="eyebrow">Correo</p>
+                        <h3>Conexión segura con Gmail</h3>
+                      </div>
+                      <span className={gmailOAuth.connected ? 'positive' : 'neutral'}>{gmailOAuth.connected ? 'Conectado' : 'Sin conectar'}</span>
+                    </div>
+                    {gmailOAuth.configured ? (
+                      <>
+                        <p>Los códigos de validación y las confirmaciones se enviarán desde {gmailOAuth.sender} mediante OAuth 2.0.</p>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          <button className="btn primary" type="button" onClick={connectGmailOAuth}>
+                            {gmailOAuth.connected ? 'Reconectar Gmail' : 'Conectar Gmail'}
+                          </button>
+                          <button className="btn secondary" type="button" onClick={loadGmailOAuthStatus}>Actualizar estado</button>
+                        </div>
+                      </>
+                    ) : (
+                      <p>Faltan las credenciales OAuth de Google en la configuración del servidor. Sigue la guía de OAuth antes de conectar Gmail.</p>
+                    )}
+                  </div>
                   {/* Formulario de cambio de contraseña */}
                   <div style={{ padding: 20, background: 'white', borderRadius: 12, boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                     <div className="section-heading">
@@ -1043,7 +1280,7 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                           <div className="message-meta-side">
-                            <span className="message-status"><span className="status-dot" />Nuevo</span>
+                            <span className="message-status"><span className="status-dot" />{message.status === 'resolved' ? 'Atendido' : message.status === 'read' ? 'En atención' : 'Nuevo'}</span>
                             <small className="message-date">{message.created_at ? new Date(message.created_at).toLocaleString('es-SV') : 'Sin fecha'}</small>
                           </div>
                         </div>
@@ -1067,6 +1304,9 @@ export default function AdminDashboard() {
                             </span>
                             Responder por WhatsApp
                           </a>}
+                          <button className="btn secondary" type="button" onClick={() => updateMessageStatus(message.id, message.status === 'resolved' ? 'unread' : 'resolved')}>
+                            {message.status === 'resolved' ? 'Marcar como nuevo' : 'Marcar atendido'}
+                          </button>
                           <button className="danger" type="button" onClick={() => deleteMessageItem(message.id)}>Eliminar</button>
                         </div>
                       </article>
@@ -1082,6 +1322,9 @@ export default function AdminDashboard() {
                   <p className="eyebrow">Noticias</p>
                   <h3>Administrar eventos y publicaciones</h3>
                 </div>
+                <div style={{ marginBottom: 16 }}>
+                  <button className="btn primary" type="button" onClick={() => openEventForm()}>Agregar noticia</button>
+                </div>
                 <div className="admin-list" style={{ display: 'grid', gap: 12 }}>
                   {events.length === 0 ? (
                     <p>No hay noticias registradas.</p>
@@ -1096,7 +1339,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button className="btn secondary" type="button" onClick={() => { setEditingEvent(item); setEditingGallery(null) }}>
+                        <button className="btn secondary" type="button" onClick={() => openEventForm(item)}>
                           Editar
                         </button>
                         <button className="danger" type="button" onClick={() => deleteEventItem(item.id)}>
@@ -1112,52 +1355,100 @@ export default function AdminDashboard() {
         )}
 
         {(editingGallery || editingEvent) && (
-          <section className="panel-form" style={{ marginTop: 24, padding: 16, background: 'white', borderRadius: 12, boxShadow: '0 12px 24px rgba(0,0,0,0.05)' }}>
-            <h3>{editingGallery ? (editingGallery.id ? 'Editar foto' : 'Agregar nueva foto') : 'Editar noticia'}</h3>
+          <section ref={contentFormRef} className="panel-form" style={{ marginTop: 24, padding: 16, background: 'white', borderRadius: 12, boxShadow: '0 12px 24px rgba(0,0,0,0.05)' }}>
+            <h3>{editingGallery ? (editingGallery.id ? 'Editar publicación' : 'Agregar publicación') : (editingEvent.id ? 'Editar noticia' : 'Agregar noticia')}</h3>
             <form
               onSubmit={async (event) => {
                 event.preventDefault()
                 const values = Object.fromEntries(new FormData(event.currentTarget).entries())
+                if (!imageDraft.trim()) {
+                  setNotice('Selecciona una imagen desde tu equipo o proporciona una URL.')
+                  return
+                }
                 if (editingGallery) {
                   await saveGalleryItem({
                     title: values.title,
                     description: values.description,
-                    image_url: values.image_url,
+                    location: values.location,
+                    event_date: values.event_date,
+                    event_time: values.event_time,
+                    image_url: imageDraft,
                     sort_order: Number(values.sort_order || 0),
                   })
                 } else {
                   await saveEventItem({
                     title: values.title,
                     news: values.news,
+                    topic: values.topic,
                     description: values.description,
                     event_date: values.event_date,
                     event_time: values.event_time,
-                    image_url: values.image_url,
+                    image_url: imageDraft,
                     location: values.location,
                     map_iframe: values.map_iframe,
+                    is_important: values.is_important === 'on',
                   })
                 }
                 event.currentTarget.reset()
               }}
             >
               <div className="form-grid" style={{ display: 'grid', gap: 12 }}>
-                <input name="title" defaultValue={editingGallery?.title || editingEvent?.title || ''} placeholder="Título" required />
-                {editingEvent && <input name="news" defaultValue={editingEvent?.news || ''} placeholder="Noticia" required />}
-                <textarea name="description" defaultValue={editingGallery?.description || editingEvent?.description || ''} placeholder="Descripción" required />
-                <input name="image_url" defaultValue={editingGallery?.image_url || editingEvent?.image_url || ''} placeholder="URL de imagen" required />
-                {editingGallery && <input name="sort_order" type="number" defaultValue={editingGallery?.sort_order ?? 0} placeholder="Orden" />}
+                <label>
+                  Tema principal
+                  <input name="title" defaultValue={editingGallery?.title || editingEvent?.title || ''} placeholder={editingGallery ? 'Ej. Feria científica' : 'Título de la noticia'} required />
+                </label>
+                {editingEvent && <input name="news" defaultValue={editingEvent?.news ? 'true' : ''} placeholder="Noticia" />}
+                {editingEvent && <input name="topic" defaultValue={editingEvent?.topic || ''} placeholder="Tema" />}
+                <label>
+                  Contenido y motivo de la actividad
+                  <textarea name="description" defaultValue={editingGallery?.description || editingEvent?.description || ''} placeholder="Describe qué actividad se realizó y por qué se tomó esta foto" required />
+                </label>
+                <div style={{ display: 'grid', gap: 8, padding: 12, border: '1px dashed #94a3b8', borderRadius: 10, background: '#f8fafc' }}>
+                  <label htmlFor="image_file"><strong>Imagen de portada</strong><br /><small>Selecciona una foto desde tu dispositivo (JPG, PNG o WebP). Se optimiza automáticamente.</small></label>
+                  <input
+                    id="image_file"
+                    name="image_file"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={async (event) => {
+                      const file = event.target.files?.[0]
+                      if (!file) return
+                      try {
+                        setUploadingImage(true)
+                        setImageDraft(await imageFileToDataUrl(file))
+                        setNotice('Imagen lista para guardar.')
+                      } catch (error) {
+                        event.target.value = ''
+                        setNotice(error.message)
+                      } finally {
+                        setUploadingImage(false)
+                      }
+                    }}
+                  />
+                  <label htmlFor="image_url">O usa una URL de imagen</label>
+                  <input id="image_url" name="image_url" value={imageDraft.startsWith('data:') ? '' : imageDraft} onChange={(event) => setImageDraft(event.target.value)} placeholder="https://ejemplo.com/foto.jpg" />
+                  {uploadingImage && <small>Optimizando imagen…</small>}
+                  {imageDraft && <img src={imageDraft} alt="Vista previa de la imagen seleccionada" style={{ width: '100%', maxWidth: 360, maxHeight: 220, objectFit: 'cover', borderRadius: 8 }} />}
+                </div>
+                {editingGallery && <>
+                  <label>Lugar donde se realizó<input name="location" defaultValue={editingGallery?.location || ''} placeholder="Ej. Cancha del centro escolar" required /></label>
+                  <label>Fecha<input name="event_date" type="date" defaultValue={dateInputValue(editingGallery?.event_date)} required /></label>
+                  <label>Hora<input name="event_time" type="time" defaultValue={timeInputValue(editingGallery?.event_time)} required /></label>
+                  <input name="sort_order" type="number" defaultValue={editingGallery?.sort_order ?? 0} placeholder="Orden" />
+                </>}
                 {editingEvent && (
                   <>
-                    <input name="location" defaultValue={editingEvent?.location || ''} placeholder="Ubicación" />
+                    <input name="location" defaultValue={editingEvent?.location || ''} placeholder="Ubicación pública para las familias" />
                     <input name="event_date" type="date" defaultValue={dateInputValue(editingEvent?.event_date)} />
                     <input name="event_time" type="time" defaultValue={timeInputValue(editingEvent?.event_time)} />
                     <textarea name="map_iframe" defaultValue={editingEvent?.map_iframe || ''} placeholder="Iframe del mapa (opcional)" />
+                    <label><input name="is_important" type="checkbox" defaultChecked={editingEvent?.is_important || false} /> Mostrar como aviso importante en Inicio</label>
                   </>
                 )}
               </div>
               <div className="form-actions" style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-                <button className="btn primary" type="submit">Guardar</button>
-                <button className="btn secondary" type="button" onClick={() => { setEditingGallery(null); setEditingEvent(null); setNotice('') }}>
+                <button className="btn primary" type="submit" disabled={uploadingImage}>{uploadingImage ? 'Preparando imagen…' : 'Guardar'}</button>
+                <button className="btn secondary" type="button" onClick={() => { setEditingGallery(null); setEditingEvent(null); setImageDraft(''); setNotice('') }}>
                   Cancelar
                 </button>
               </div>

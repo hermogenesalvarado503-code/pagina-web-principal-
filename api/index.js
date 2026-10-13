@@ -3,41 +3,60 @@ import cors from 'cors'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
 import admin from 'firebase-admin'
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+import process from 'node:process'
+import { Buffer } from 'node:buffer'
+import { signToken, verifyToken } from './auth/token.js'
 const app = express()
 
 // Inicializar Firebase
-let firebaseApp
-if (!admin.apps.length) {
-  try {
-    const privateKey = (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n')
-    const serviceAccount = {
-      type: 'service_account',
-      project_id: process.env.FIREBASE_PROJECT_ID,
-      private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-      private_key: privateKey,
-      client_email: process.env.FIREBASE_CLIENT_EMAIL,
-      client_id: '105797166401629345813',
-      auth_uri: 'https://accounts.google.com/o/oauth2/auth',
-      token_uri: 'https://oauth2.googleapis.com/token',
-      auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs'
-    }
-    
-    firebaseApp = admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      projectId: serviceAccount.project_id
-    })
-  } catch (err) {
-    console.error('Firebase init error:', err.message)
+function getFirebaseApp() {
+  if (admin.apps.length) return admin.app()
+
+  const projectId = process.env.FIREBASE_PROJECT_ID?.trim()
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim()
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY
+    ?.replace(/\\n/g, '\n')
+    .replace(/^"|"$/g, '')
+    .trim()
+
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error('Faltan FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL o FIREBASE_PRIVATE_KEY')
   }
+
+  return admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId,
+      clientEmail,
+      privateKey,
+    }),
+    projectId,
+  })
+}
+
+try {
+  getFirebaseApp()
+} catch (err) {
+  console.error('Firebase init error:', err.message)
+  throw err
 }
 
 const db = admin.firestore()
-const auth = admin.auth()
+
+// Vercel puede entregar a Express la ruta con o sin el prefijo /api.
+if (process.env.VERCEL) {
+  app.use((req, res, next) => {
+    if (req.url === '/') req.url = '/api'
+    else if (!req.url.startsWith('/api/')) req.url = `/api${req.url}`
+    next()
+  })
+}
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', firebaseProject: process.env.FIREBASE_PROJECT_ID })
+})
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', firebaseProject: process.env.FIREBASE_PROJECT_ID })
+})
 
 // Configurar nodemailer
 const transporter = nodemailer.createTransport({
@@ -50,11 +69,41 @@ const transporter = nodemailer.createTransport({
 
 // Middleware
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
-app.use(express.json())
+app.use(express.json({ limit: '1mb' }))
 
 // Función para crear hash de contraseña
 function hashPassword(password) {
   return crypto.createHash('sha256').update(password).digest('hex')
+}
+
+function verifyPassword(password, userData) {
+  const sha256Hash = hashPassword(password)
+  if (userData.passwordHash === sha256Hash) return true
+
+  if (userData.passwordSalt && userData.passwordHash) {
+    const derivedHash = crypto
+      .pbkdf2Sync(password, userData.passwordSalt, 120000, 64, 'sha512')
+      .toString('hex')
+    return crypto.timingSafeEqual(
+      Buffer.from(derivedHash, 'hex'),
+      Buffer.from(userData.passwordHash, 'hex'),
+    )
+  }
+
+  return false
+}
+
+function authenticateUser(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1]
+  const decoded = verifyToken(token)
+
+  if (!decoded?.uid) {
+    return res.status(401).json({ error: 'No token or invalid token' })
+  }
+
+  req.user = decoded
+  req.userId = decoded.uid
+  next()
 }
 
 // Verificar rol admin
@@ -65,7 +114,11 @@ async function requireAdmin(req, res, next) {
       return res.status(401).json({ error: 'No token' })
     }
     
-    const decoded = JSON.parse(Buffer.from(token.split('.')[1], 'base64'))
+    const decoded = verifyToken(token)
+    if (!decoded?.uid) {
+      return res.status(401).json({ error: 'Invalid token' })
+    }
+
     const userDoc = await db.collection('users').doc(decoded.uid).get()
     const userData = userDoc.data()
     
@@ -76,14 +129,14 @@ async function requireAdmin(req, res, next) {
     req.userId = decoded.uid
     req.userRole = userData.role
     next()
-  } catch (error) {
+  } catch {
     res.status(401).json({ error: 'Invalid token' })
   }
 }
 
 // ==================== AUTH ====================
 
-app.post('/api/auth/login', async (req, res) => {
+async function loginHandler(req, res) {
   try {
     const { email, password } = req.body
     if (!email || !password) {
@@ -97,18 +150,11 @@ app.post('/api/auth/login', async (req, res) => {
 
     const userDoc = usersSnap.docs[0]
     const userData = userDoc.data()
-    const passwordHash = hashPassword(password)
-
-    if (userData.passwordHash !== passwordHash) {
+    if (!verifyPassword(password, userData)) {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
-    const token = Buffer.from(JSON.stringify({
-      uid: userDoc.id,
-      email: userData.email,
-      role: userData.role,
-      iat: Math.floor(Date.now() / 1000)
-    })).toString('base64').replace(/=/g, '')
+    const token = signToken({ id: userDoc.id, email: userData.email, role: userData.role })
 
     res.json({
       user: {
@@ -118,6 +164,30 @@ app.post('/api/auth/login', async (req, res) => {
         role: userData.role
       },
       token
+    })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+}
+
+app.post('/api/auth/login', loginHandler)
+app.post('/auth/login', loginHandler)
+
+app.get('/api/me', authenticateUser, async (req, res) => {
+  try {
+    const userDoc = await db.collection('users').doc(req.userId).get()
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const userData = userDoc.data()
+    res.json({
+      user: {
+        id: userDoc.id,
+        name: userData.name,
+        email: userData.email,
+        role: userData.role,
+      },
     })
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -137,7 +207,8 @@ app.post('/api/auth/change-password', async (req, res) => {
       return res.status(401).json({ error: 'No token' })
     }
 
-    const decoded = JSON.parse(Buffer.from(token.split('.')[1], 'base64'))
+    const decoded = verifyToken(token)
+    if (!decoded) return res.status(401).json({ error: 'Invalid token' })
     const userId = decoded.uid
 
     if (!newPassword || newPassword.length < 8) {
@@ -348,13 +419,35 @@ app.get('/api/gallery', async (req, res) => {
 
 app.post('/api/gallery', requireAdmin, async (req, res) => {
   try {
-    const { title, description, imageUrl, sortOrder } = req.body
-    const docRef = await db.collection('gallery').add({
-      title, description, imageUrl,
-      sortOrder: parseInt(sortOrder) || 0,
+    const { title, description, location, sort_order, sortOrder } = req.body
+    const eventDate = req.body.event_date || req.body.eventDate || ''
+    const eventTime = req.body.event_time || req.body.eventTime || ''
+    const imageUrl = req.body.image_url || req.body.imageUrl || ''
+    const item = {
+      title, description, location: location || '', eventDate, eventTime, imageUrl,
+      sortOrder: parseInt(sort_order ?? sortOrder, 10) || 0,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
-    })
-    res.status(201).json({ id: docRef.id, message: 'Gallery item created' })
+    }
+    const docRef = await db.collection('gallery').add(item)
+    res.status(201).json({ id: docRef.id, title, description, location: location || '', eventDate, eventTime, imageUrl, sortOrder: item.sortOrder, message: 'Gallery item created' })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.put('/api/gallery/:id', requireAdmin, async (req, res) => {
+  try {
+    const { title, description, location, sort_order, sortOrder } = req.body
+    const eventDate = req.body.event_date || req.body.eventDate || ''
+    const eventTime = req.body.event_time || req.body.eventTime || ''
+    const imageUrl = req.body.image_url || req.body.imageUrl || ''
+    const item = {
+      title, description, location: location || '', eventDate, eventTime, imageUrl,
+      sortOrder: parseInt(sort_order ?? sortOrder, 10) || 0,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }
+    await db.collection('gallery').doc(req.params.id).update(item)
+    res.json({ id: req.params.id, title, description, location: location || '', eventDate, eventTime, imageUrl, sortOrder: item.sortOrder })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
@@ -386,12 +479,43 @@ app.get('/api/events', async (req, res) => {
 
 app.post('/api/events', requireAdmin, async (req, res) => {
   try {
-    const { title, news, description, eventDate, eventTime, imageUrl, location, mapIframe } = req.body
-    const docRef = await db.collection('events').add({
-      title, news: Boolean(news), description, eventDate, eventTime, imageUrl, location, mapIframe,
+    const { title, news, topic, description, location } = req.body
+    const eventDate = req.body.event_date || req.body.eventDate || ''
+    const eventTime = req.body.event_time || req.body.eventTime || ''
+    const imageUrl = req.body.image_url || req.body.imageUrl || ''
+    const mapIframe = req.body.map_iframe || req.body.mapIframe || ''
+    const event = {
+      title, news: Boolean(news), topic: topic || '', description, eventDate, eventTime, imageUrl, location, mapIframe,
+      isImportant: Boolean(req.body.is_important ?? req.body.isImportant),
       createdAt: admin.firestore.FieldValue.serverTimestamp()
+    }
+    const docRef = await db.collection('events').add(event)
+    res.status(201).json({
+      id: docRef.id, title, news: event.news, topic: event.topic, description, eventDate, eventTime,
+      imageUrl, location, mapIframe, isImportant: event.isImportant, message: 'Event created',
     })
-    res.status(201).json({ id: docRef.id, message: 'Event created' })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.put('/api/events/:id', requireAdmin, async (req, res) => {
+  try {
+    const { title, news, topic, description, location } = req.body
+    const eventDate = req.body.event_date || req.body.eventDate || ''
+    const eventTime = req.body.event_time || req.body.eventTime || ''
+    const imageUrl = req.body.image_url || req.body.imageUrl || ''
+    const mapIframe = req.body.map_iframe || req.body.mapIframe || ''
+    const event = {
+      title, news: Boolean(news), topic: topic || '', description, eventDate, eventTime, imageUrl, location, mapIframe,
+      isImportant: Boolean(req.body.is_important ?? req.body.isImportant),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }
+    await db.collection('events').doc(req.params.id).update(event)
+    res.json({
+      id: req.params.id, title, news: event.news, topic: event.topic, description, eventDate, eventTime,
+      imageUrl, location, mapIframe, isImportant: event.isImportant,
+    })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
@@ -401,6 +525,28 @@ app.delete('/api/events/:id', requireAdmin, async (req, res) => {
   try {
     await db.collection('events').doc(req.params.id).delete()
     res.json({ message: 'Event deleted' })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.get('/api/site-settings', async (req, res) => {
+  try {
+    const snapshot = await db.collection('siteSettings').doc('public').get()
+    res.json({ heroImageUrl: snapshot.data()?.heroImageUrl || '' })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.put('/api/site-settings', requireAdmin, async (req, res) => {
+  try {
+    const heroImageUrl = String(req.body.heroImageUrl || req.body.hero_image_url || '').trim()
+    await db.collection('siteSettings').doc('public').set({
+      heroImageUrl,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true })
+    res.json({ heroImageUrl })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

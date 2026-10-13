@@ -64,7 +64,7 @@ const transporter = nodemailer.createTransport({
 
 // Middleware
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
-app.use(express.json())
+app.use(express.json({ limit: '1mb' }))
 
 // Función para crear hash de contraseña
 function hashPassword(password) {
@@ -429,19 +429,64 @@ app.get('/api/gallery', async (req, res) => {
 // Crear/actualizar galería (solo admin)
 app.post('/api/gallery', authenticateUser, requireAdmin, async (req, res) => {
   try {
-    const { title, description, imageUrl, sortOrder } = req.body
-
-    const docRef = await db.collection('gallery').add({
+    const { title, description, location, sort_order, sortOrder } = req.body
+    const eventDate = req.body.event_date || req.body.eventDate || ''
+    const eventTime = req.body.event_time || req.body.eventTime || ''
+    const imageUrl = req.body.image_url || req.body.imageUrl || ''
+    const item = {
       title,
       description,
+      location: location || '',
+      eventDate,
+      eventTime,
       imageUrl,
-      sortOrder: parseInt(sortOrder) || 0,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    })
+      sortOrder: parseInt(sort_order ?? sortOrder, 10) || 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }
+    const docRef = await db.collection('gallery').add(item)
 
     res.status(201).json({
       id: docRef.id,
+      title,
+      description,
+      location: location || '',
+      eventDate,
+      eventTime,
+      imageUrl,
+      sortOrder: item.sortOrder,
       message: 'Gallery item created'
+    })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.put('/api/gallery/:id', authenticateUser, requireAdmin, async (req, res) => {
+  try {
+    const { title, description, location, sort_order, sortOrder } = req.body
+    const eventDate = req.body.event_date || req.body.eventDate || ''
+    const eventTime = req.body.event_time || req.body.eventTime || ''
+    const imageUrl = req.body.image_url || req.body.imageUrl || ''
+    const item = {
+      title,
+      description,
+      location: location || '',
+      eventDate,
+      eventTime,
+      imageUrl,
+      sortOrder: parseInt(sort_order ?? sortOrder, 10) || 0,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }
+    await db.collection('gallery').doc(req.params.id).update(item)
+    res.json({
+      id: req.params.id,
+      title,
+      description,
+      location: location || '',
+      eventDate,
+      eventTime,
+      imageUrl,
+      sortOrder: item.sortOrder,
     })
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -478,23 +523,78 @@ app.get('/api/events', async (req, res) => {
 // Crear evento (solo admin)
 app.post('/api/events', authenticateUser, requireAdmin, async (req, res) => {
   try {
-    const { title, news, description, eventDate, eventTime, imageUrl, location, mapIframe } = req.body
-
-    const docRef = await db.collection('events').add({
+    const { title, news, topic, description, location } = req.body
+    const eventDate = req.body.event_date || req.body.eventDate || ''
+    const eventTime = req.body.event_time || req.body.eventTime || ''
+    const imageUrl = req.body.image_url || req.body.imageUrl || ''
+    const mapIframe = req.body.map_iframe || req.body.mapIframe || ''
+    const event = {
       title,
       news: Boolean(news),
+      topic: topic || '',
       description,
       eventDate,
       eventTime,
       imageUrl,
       location,
       mapIframe,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    })
+      isImportant: Boolean(req.body.is_important ?? req.body.isImportant),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }
+    const docRef = await db.collection('events').add(event)
 
     res.status(201).json({
       id: docRef.id,
+      title,
+      news: event.news,
+      topic: event.topic,
+      description,
+      eventDate,
+      eventTime,
+      imageUrl,
+      location,
+      mapIframe,
+      isImportant: event.isImportant,
       message: 'Event created'
+    })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.put('/api/events/:id', authenticateUser, requireAdmin, async (req, res) => {
+  try {
+    const { title, news, topic, description, location } = req.body
+    const eventDate = req.body.event_date || req.body.eventDate || ''
+    const eventTime = req.body.event_time || req.body.eventTime || ''
+    const imageUrl = req.body.image_url || req.body.imageUrl || ''
+    const mapIframe = req.body.map_iframe || req.body.mapIframe || ''
+    const event = {
+      title,
+      news: Boolean(news),
+      topic: topic || '',
+      description,
+      eventDate,
+      eventTime,
+      imageUrl,
+      location,
+      mapIframe,
+      isImportant: Boolean(req.body.is_important ?? req.body.isImportant),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }
+    await db.collection('events').doc(req.params.id).update(event)
+    res.json({
+      id: req.params.id,
+      title,
+      news: event.news,
+      topic: event.topic,
+      description,
+      eventDate,
+      eventTime,
+      imageUrl,
+      location,
+      mapIframe,
+      isImportant: event.isImportant,
     })
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -506,6 +606,28 @@ app.delete('/api/events/:id', authenticateUser, requireAdmin, async (req, res) =
   try {
     await db.collection('events').doc(req.params.id).delete()
     res.json({ message: 'Event deleted' })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.get('/api/site-settings', async (req, res) => {
+  try {
+    const snapshot = await db.collection('siteSettings').doc('public').get()
+    res.json({ heroImageUrl: snapshot.data()?.heroImageUrl || '' })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+app.put('/api/site-settings', authenticateUser, requireAdmin, async (req, res) => {
+  try {
+    const heroImageUrl = String(req.body.heroImageUrl || req.body.hero_image_url || '').trim()
+    await db.collection('siteSettings').doc('public').set({
+      heroImageUrl,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true })
+    res.json({ heroImageUrl })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

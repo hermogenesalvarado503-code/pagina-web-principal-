@@ -485,6 +485,50 @@ button {
   gap: 1rem;
 }
 
+.notice-board,
+.grades-section {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.important-notices,
+.grade-cycles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.important-notice,
+.grade-cycles article {
+  border-top: 3px solid var(--accent);
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.important-notice img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  margin-bottom: 0.8rem;
+}
+
+.important-notice h3,
+.grade-cycles h3 {
+  margin: 0.3rem 0;
+  color: var(--primary-dark);
+}
+
+.important-notice p,
+.grade-cycles p {
+  margin: 0.35rem 0;
+}
+
+.important-label {
+  display: inline-block;
+  margin: 0.3rem 0;
+  color: #9a3412;
+}
+
 .stats-grid,
 .card-grid,
 .gallery-grid,
@@ -785,6 +829,15 @@ button {
   padding: 0.9rem 1rem;
   color: var(--primary-dark);
   font-weight: 800;
+}
+
+.gallery-card figcaption span,
+.gallery-card figcaption small {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--muted);
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 .panel-form {
@@ -1525,6 +1578,8 @@ button {
 
   .card-grid,
   .gallery-grid,
+  .important-notices,
+  .grade-cycles,
   .reviews-grid,
   .dashboard-grid,
   .footer-main {

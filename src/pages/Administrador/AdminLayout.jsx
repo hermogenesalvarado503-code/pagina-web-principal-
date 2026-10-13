@@ -3,6 +3,7 @@ import './admin.css'
 
 const sections = [
   { id: 'overview', label: 'Dashboard', icon: '▦' },
+  { id: 'home', label: 'Portada', icon: '⌂' },
   { id: 'users', label: 'Usuarios', icon: '◌' },
   { id: 'gallery', label: 'Galería', icon: '▧' },
   { id: 'events', label: 'Noticias', icon: '✧' },

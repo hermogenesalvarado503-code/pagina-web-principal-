@@ -11,7 +11,11 @@ const { Pool } = pg
 const PORT = Number(process.env.PORT || 4000)
 const JWT_SECRET = process.env.JWT_SECRET || 'drhga-dev-secret-change-me'
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://drhga:drhga@localhost:5432/drhga'
+const ADMIN_NAME = process.env.ADMIN_NAME || 'Administrador DRHGA'
+const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || 'admin@drhga.edu.sv').trim().toLowerCase()
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '@336796Uy'
 const COOKIE_NAME = 'drhga_session'
+const MAX_REQUEST_BODY_BYTES = 3 * 1024 * 1024
 
 const pool = new Pool({ connectionString: DATABASE_URL })
 const roles = ['admin', 'user', 'student', 'teacher']
@@ -31,7 +35,7 @@ function json(req, res, status, payload) {
     'Content-Length': Buffer.byteLength(body),
     'Access-Control-Allow-Origin': getAllowOrigin(req.headers.origin),
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Credentials': 'true',
     'Vary': 'Origin',
   })
@@ -60,8 +64,23 @@ function getCookie(req, name) {
 }
 
 async function readBody(req) {
+  const contentLength = Number(req.headers['content-length'] || 0)
+  if (contentLength > MAX_REQUEST_BODY_BYTES) {
+    const error = new Error('La imagen es demasiado grande. Selecciona una imagen menor.')
+    error.statusCode = 413
+    throw error
+  }
   const chunks = []
-  for await (const chunk of req) chunks.push(chunk)
+  let size = 0
+  for await (const chunk of req) {
+    size += chunk.length
+    if (size > MAX_REQUEST_BODY_BYTES) {
+      const error = new Error('La imagen es demasiado grande. Selecciona una imagen menor.')
+      error.statusCode = 413
+      throw error
+    }
+    chunks.push(chunk)
+  }
   const raw = Buffer.concat(chunks).toString('utf8')
   return raw ? JSON.parse(raw) : {}
 }
@@ -183,19 +202,81 @@ function safeEqualText(left, right) {
   return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer)
 }
 
-// Helper para enviar emails (en prueba )
 import nodemailer from 'nodemailer'
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_EMAIL,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-})
+const GMAIL_OAUTH_SCOPE = 'https://mail.google.com/'
+const GMAIL_TOKEN_SETTING = 'gmail_oauth_refresh_token'
+const oauthStates = new Map()
+
+function getGmailOAuthConfig() {
+  return {
+    clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+    redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI || `http://localhost:${PORT}/api/auth/gmail-oauth/callback`,
+    email: process.env.GMAIL_EMAIL || '',
+  }
+}
+
+function getTokenEncryptionKey() {
+  const secret = process.env.OAUTH_TOKEN_ENCRYPTION_KEY || process.env.JWT_SECRET
+  if (!secret || secret === 'cambia-este-secreto-en-produccion') {
+    throw new Error('Configura OAUTH_TOKEN_ENCRYPTION_KEY para proteger la conexión de Gmail.')
+  }
+  return crypto.createHash('sha256').update(secret).digest()
+}
+
+function encryptSecret(value) {
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', getTokenEncryptionKey(), iv)
+  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return [iv, tag, encrypted].map((part) => part.toString('base64url')).join('.')
+}
+
+function decryptSecret(value) {
+  const [ivValue, tagValue, encryptedValue] = String(value || '').split('.')
+  if (!ivValue || !tagValue || !encryptedValue) throw new Error('La conexión de Gmail guardada no es válida.')
+  const decipher = crypto.createDecipheriv('aes-256-gcm', getTokenEncryptionKey(), Buffer.from(ivValue, 'base64url'))
+  decipher.setAuthTag(Buffer.from(tagValue, 'base64url'))
+  return Buffer.concat([decipher.update(Buffer.from(encryptedValue, 'base64url')), decipher.final()]).toString('utf8')
+}
+
+async function getStoredRefreshToken() {
+  const result = await pool.query('SELECT value FROM app_settings WHERE key = $1', [GMAIL_TOKEN_SETTING])
+  return result.rows[0]?.value ? decryptSecret(result.rows[0].value) : ''
+}
+
+async function saveRefreshToken(refreshToken) {
+  await pool.query(
+    `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [GMAIL_TOKEN_SETTING, encryptSecret(refreshToken)],
+  )
+}
+
+async function getMailTransporter() {
+  const oauth = getGmailOAuthConfig()
+  if (!oauth.clientId || !oauth.clientSecret || !oauth.email) {
+    throw new Error('Falta configurar GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET o GMAIL_EMAIL.')
+  }
+  const refreshToken = await getStoredRefreshToken()
+  if (!refreshToken) throw new Error('Gmail aún no está autorizado. Conéctalo desde Perfil en Administración.')
+
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      type: 'OAuth2',
+      user: oauth.email,
+      clientId: oauth.clientId,
+      clientSecret: oauth.clientSecret,
+      refreshToken,
+    },
+  })
+}
 
 async function sendEmail(to, subject, html) {
   try {
+    const transporter = await getMailTransporter()
     await transporter.sendMail({
       from: `"DRHGA" <${process.env.GMAIL_EMAIL}>`,
       to,
@@ -206,6 +287,77 @@ async function sendEmail(to, subject, html) {
   } catch (error) {
     console.error('Error enviando email:', error)
     return false
+  }
+}
+
+function createGmailAuthorizationUrl(userId) {
+  const oauth = getGmailOAuthConfig()
+  if (!oauth.clientId || !oauth.clientSecret || !oauth.email) {
+    const error = new Error('Configura GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET y GMAIL_EMAIL antes de conectar Gmail.')
+    error.statusCode = 400
+    throw error
+  }
+  const state = crypto.randomBytes(32).toString('base64url')
+  oauthStates.set(state, { userId, expiresAt: Date.now() + 10 * 60 * 1000 })
+  for (const [savedState, saved] of oauthStates) {
+    if (saved.expiresAt < Date.now()) oauthStates.delete(savedState)
+  }
+
+  const query = new URLSearchParams({
+    client_id: oauth.clientId,
+    redirect_uri: oauth.redirectUri,
+    response_type: 'code',
+    scope: GMAIL_OAUTH_SCOPE,
+    access_type: 'offline',
+    prompt: 'consent',
+    login_hint: oauth.email,
+    state,
+  })
+  return `https://accounts.google.com/o/oauth2/v2/auth?${query.toString()}`
+}
+
+function sendOAuthResultPage(res, status, title, message) {
+  const body = `<!doctype html><html lang="es"><meta charset="utf-8"><title>${title}</title><body style="font-family:system-ui;max-width:620px;margin:72px auto;padding:24px;color:#0f172a"><h1>${title}</h1><p>${message}</p><p>Puedes cerrar esta ventana y volver al panel de administración.</p></body></html>`
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(body) })
+  res.end(body)
+}
+
+async function handleGmailOAuthCallback(url, res) {
+  const errorFromGoogle = url.searchParams.get('error')
+  const state = url.searchParams.get('state')
+  const code = url.searchParams.get('code')
+  const savedState = state ? oauthStates.get(state) : null
+  if (!savedState || savedState.expiresAt < Date.now()) {
+    if (state) oauthStates.delete(state)
+    return sendOAuthResultPage(res, 400, 'No se pudo conectar Gmail', 'La solicitud expiró o no es válida. Inicia la conexión nuevamente desde el panel.')
+  }
+  oauthStates.delete(state)
+  if (errorFromGoogle || !code) {
+    return sendOAuthResultPage(res, 400, 'Autorización cancelada', 'Google no otorgó los permisos necesarios para enviar correos.')
+  }
+
+  try {
+    const oauth = getGmailOAuthConfig()
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: oauth.clientId,
+        client_secret: oauth.clientSecret,
+        redirect_uri: oauth.redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    })
+    const tokens = await response.json()
+    if (!response.ok || !tokens.refresh_token) {
+      throw new Error('Google no entregó un token de renovación. Revoca el acceso anterior y vuelve a autorizar la aplicación.')
+    }
+    await saveRefreshToken(tokens.refresh_token)
+    return sendOAuthResultPage(res, 200, 'Gmail conectado', 'La autorización se guardó de forma cifrada. Los códigos y confirmaciones ya usarán OAuth 2.0.')
+  } catch (error) {
+    console.error('Error conectando Gmail OAuth:', error)
+    return sendOAuthResultPage(res, 500, 'No se pudo conectar Gmail', error.message || 'Ocurrió un error al guardar la autorización.')
   }
 }
 
@@ -248,6 +400,7 @@ async function seedAnalyticsData() {
 }
 
 async function migrate() {
+  const adminCredentials = hashPassword(ADMIN_PASSWORD)
   await pool.query(`
     DO $$
     BEGIN
@@ -297,11 +450,18 @@ async function migrate() {
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       description TEXT,
+      location TEXT,
+      event_date DATE,
+      event_time TIME,
       image_url TEXT NOT NULL,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE gallery_items ADD COLUMN IF NOT EXISTS location TEXT;
+    ALTER TABLE gallery_items ADD COLUMN IF NOT EXISTS event_date DATE;
+    ALTER TABLE gallery_items ADD COLUMN IF NOT EXISTS event_time TIME;
 
     CREATE TABLE IF NOT EXISTS events (
       id SERIAL PRIMARY KEY,
@@ -371,6 +531,12 @@ async function migrate() {
       accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_password_change_tokens_expires ON password_change_tokens(expires_at);
     CREATE INDEX IF NOT EXISTS idx_admin_access_logs_user_id ON admin_access_logs(user_id);
     CREATE INDEX IF NOT EXISTS idx_password_change_history_user_id ON password_change_history(user_id);
@@ -381,15 +547,18 @@ async function migrate() {
   await pool.query(`
     INSERT INTO users (name, email, role, password_salt, password_hash)
     VALUES
-      ('Administrador DRHGA', 'admin@drhga.edu.sv', 'admin', '90c436599b118c9ef52a836852684341', 'c220d2f2d17c3ca4a83ba08375254d0a520f5a607ff98529a321c1143270aaec3c77c141ec895f354ee2d1bdc1bec02d0c278e5f0341c560d00ca64f375c9046'),
+      ($1, $2, 'admin', $3, $4),
       ('Usuario Demo', 'user@drhga.edu.sv', 'user', '3f340bda0054dbf668b5e08bec63a75c', '045833106931bb121a349651bf43c49bedf2300eb72296310d69548a453eacac5aa2ce1866c1202cd797813b224d6a50de1456b30c24b15a078655ea63511a90'),
       ('Estudiante Demo', 'estudiante@drhga.edu.sv', 'student', '22833ab7538c913ff15640e5346caec2', '2f3ef945c4ecbc3d7e0975d0bdeab0ddc90b5cc219be51afd40d8602c2db6e73dcd1e7210ce6186e6cd42282a9d6a4f04d47fd35249e41942872d04369f2af52'),
       ('Docente Demo', 'docente@drhga.edu.sv', 'teacher', '62713d96c4d93c27f7272c47fc508913', '477c5619244f9d91729b7aef7d440a09400b2c3d163c0dd89dccf26cb584ae3f2366fc08e305984ee7be304e5b8fe1afc2286bafa7057e2533b847e76e8a31a5')
     ON CONFLICT (email) DO UPDATE SET
+      name = EXCLUDED.name,
       role = EXCLUDED.role,
       password_salt = EXCLUDED.password_salt,
       password_hash = EXCLUDED.password_hash;
+  `, [ADMIN_NAME, ADMIN_EMAIL, adminCredentials.salt, adminCredentials.hash])
 
+  await pool.query(`
     INSERT INTO reviews (name, email, role, rating, comment)
     SELECT 'Maria Garcia', 'maria@example.com', 'Madre de familia', 5, 'Excelente institucion. Mi hijo ha mejorado academica y socialmente.'
     WHERE NOT EXISTS (SELECT 1 FROM reviews);
@@ -423,23 +592,45 @@ function idFromPath(path) {
   return Number(path.split('/').pop())
 }
 
+function validImageSource(value, required = false) {
+  const source = String(value || '').trim()
+  if (!source) return !required
+  if (/^data:image\/(jpeg|png|webp);base64,/i.test(source)) return true
+  return /^https?:\/\//i.test(source) || source.startsWith('/img/')
+}
+
 async function upsertGallery(req, res, id = null) {
   const body = await readBody(req)
+  if (
+    !String(body.title || '').trim() ||
+    !String(body.description || '').trim() ||
+    !String(body.location || '').trim() ||
+    !body.event_date ||
+    !body.event_time ||
+    !validImageSource(body.image_url, true)
+  ) {
+    return json(req, res, 400, { error: 'Completa tema, descripción, ubicación, fecha, hora e imagen válida.' })
+  }
   const values = [
     body.title,
-    body.description || '',
+    body.description,
+    body.location,
+    body.event_date,
+    body.event_time,
     body.image_url,
     Number(body.sort_order || 0),
   ]
   const result = id
     ? await pool.query(
       `UPDATE gallery_items
-       SET title = $1, description = $2, image_url = $3, sort_order = $4, updated_at = NOW()
-       WHERE id = $5 RETURNING *`,
+       SET title = $1, description = $2, location = $3, event_date = $4, event_time = $5,
+           image_url = $6, sort_order = $7, updated_at = NOW()
+       WHERE id = $8 RETURNING *`,
       [...values, id],
     )
     : await pool.query(
-      'INSERT INTO gallery_items (title, description, image_url, sort_order) VALUES ($1, $2, $3, $4) RETURNING *',
+      `INSERT INTO gallery_items (title, description, location, event_date, event_time, image_url, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       values,
     )
 
@@ -448,6 +639,9 @@ async function upsertGallery(req, res, id = null) {
 
 async function upsertEvent(req, res, id = null) {
   const body = await readBody(req)
+  if (!String(body.title || '').trim() || !String(body.news || '').trim() || !String(body.description || '').trim() || !validImageSource(body.image_url)) {
+    return json(req, res, 400, { error: 'Completa título, noticia y descripción; si agregas una imagen, debe ser válida.' })
+  }
   const values = [
     body.title,
     body.news,
@@ -606,8 +800,29 @@ async function router(req, res) {
   const path = url.pathname
 
   try {
+    if (req.method === 'GET' && path === '/api/auth/gmail-oauth/callback') {
+      return handleGmailOAuthCallback(url, res)
+    }
+
     if (req.method === 'GET' && path === '/api/health') {
       return json(req, res, 200, { ok: true, roles })
+    }
+
+    if (req.method === 'GET' && path === '/api/auth/gmail-oauth-url') {
+      const auth = requireAdmin(req, res)
+      if (!auth) return
+      return json(req, res, 200, { url: createGmailAuthorizationUrl(auth.sub) })
+    }
+
+    if (req.method === 'GET' && path === '/api/auth/gmail-oauth-status') {
+      if (!requireAdmin(req, res)) return
+      const oauth = getGmailOAuthConfig()
+      const result = await pool.query('SELECT 1 FROM app_settings WHERE key = $1', [GMAIL_TOKEN_SETTING])
+      return json(req, res, 200, {
+        configured: Boolean(oauth.clientId && oauth.clientSecret && oauth.email),
+        connected: Boolean(result.rows[0]),
+        sender: oauth.email || null,
+      })
     }
 
     if (req.method === 'GET' && path === '/api-docs') {
@@ -850,11 +1065,21 @@ async function router(req, res) {
         <p style="font-size: 12px; color: #999;">Centro Escolar Dr. Hermógenes Alvarado</p>
       `
 
-      await sendEmail(user.email, 'Contraseña cambiada exitosamente', confirmEmail)
+      // Mantener las dos notificaciones en el correo de seguridad configurado.
+      // La cuenta de acceso puede tener un correo interno distinto al del administrador.
+      const confirmationRecipient = process.env.PASSWORD_CHANGE_EMAIL || user.email
+      const confirmationSent = await sendEmail(
+        confirmationRecipient,
+        'Contraseña cambiada exitosamente',
+        confirmEmail
+      )
 
       return json(req, res, 200, { 
         ok: true, 
-        message: 'Contraseña actualizada correctamente. Confirma por email.',
+        confirmationEmailSent: confirmationSent,
+        message: confirmationSent
+          ? 'Contraseña actualizada correctamente. Confirma por email.'
+          : 'Contraseña actualizada, pero no se pudo enviar el correo de confirmación. Revisa la configuración SMTP.',
       })
     }
 
@@ -882,6 +1107,27 @@ async function router(req, res) {
       )
 
       return json(req, res, 200, result.rows)
+    }
+
+    if (req.method === 'GET' && path === '/api/site-settings') {
+      const result = await pool.query('SELECT value FROM app_settings WHERE key = $1', ['hero_image_url'])
+      return json(req, res, 200, { heroImageUrl: result.rows[0]?.value || '' })
+    }
+
+    if (req.method === 'PUT' && path === '/api/site-settings') {
+      if (!requireAdmin(req, res)) return
+      const body = await readBody(req)
+      const heroImageUrl = String(body.heroImageUrl || body.hero_image_url || '').trim()
+      if (heroImageUrl && !validImageSource(heroImageUrl)) {
+        return json(req, res, 400, { error: 'Selecciona una imagen válida o ingresa una URL segura.' })
+      }
+
+      await pool.query(
+        `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        ['hero_image_url', heroImageUrl],
+      )
+      return json(req, res, 200, { heroImageUrl })
     }
 
     if (req.method === 'GET' && path === '/api/gallery') {
@@ -1010,6 +1256,21 @@ async function router(req, res) {
       return json(req, res, 200, result.rows)
     }
 
+    if (req.method === 'PATCH' && path.startsWith('/api/messages/')) {
+      if (!requireAdmin(req, res)) return
+      const { status } = await readBody(req)
+      const validStatuses = ['unread', 'read', 'resolved']
+      if (!validStatuses.includes(status)) {
+        return json(req, res, 400, { error: 'Estado de mensaje inválido.' })
+      }
+      const result = await pool.query(
+        'UPDATE messages SET status = $1 WHERE id = $2 RETURNING *',
+        [status, idFromPath(path)],
+      )
+      if (!result.rows[0]) return json(req, res, 404, { error: 'Mensaje no encontrado.' })
+      return json(req, res, 200, result.rows[0])
+    }
+
     if (req.method === 'DELETE' && path.startsWith('/api/messages/')) {
       if (!requireAdmin(req, res)) return
       await pool.query('DELETE FROM messages WHERE id = $1', [idFromPath(path)])
@@ -1019,7 +1280,7 @@ async function router(req, res) {
     return json(req, res, 404, { error: 'Ruta no encontrada' })
   } catch (error) {
     console.error(error)
-    return json(req, res, 500, { error: 'Error interno del servidor' })
+    return json(req, res, error.statusCode || 500, { error: error.message || 'Error interno del servidor' })
   }
 }
 

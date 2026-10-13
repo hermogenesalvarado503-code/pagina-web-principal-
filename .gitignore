@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 .vercel
 .env*
+CREDENCIALES_ADMIN.txt
+pagina-web-principal-*-firebase-adminsdk-*.json

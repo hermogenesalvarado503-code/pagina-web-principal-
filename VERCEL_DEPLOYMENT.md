@@ -29,26 +29,36 @@ vercel env add GMAIL_APP_PASSWORD
 vercel env add PASSWORD_CHANGE_EMAIL
 ```
 
-### 3. Valores de Variables (copia de .env)
+### 3. Variables requeridas
+
+Configura estos valores en Vercel usando los datos del proyecto Firebase `pagina-web-principal-76c12`.
+No copies claves privadas, contraseñas ni tokens a este archivo ni al repositorio.
+
+Variables públicas del frontend:
 
 ```
-VITE_FIREBASE_API_KEY=AIzaSyB1dG_7BnTOGKUh7wKhQToLi-qCf1u8ka8
-VITE_FIREBASE_AUTH_DOMAIN=pagina-web-principal-76c12.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=pagina-web-principal-76c12
-VITE_FIREBASE_STORAGE_BUCKET=pagina-web-principal-76c12.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=13017495393929
-VITE_FIREBASE_APP_ID=1:13017495393929:web:717c24803ec58ef8fde018
-VITE_API_URL=https://pagina-web-principal.vercel.app/api
-
-FIREBASE_PROJECT_ID=pagina-web-principal-76c12
-FIREBASE_PRIVATE_KEY_ID=64b91edd2878cc7aa88b57f6ccf3c5c6cb845b26
-FIREBASE_PRIVATE_KEY=[65-line key - ver .env]
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-fbsvc@pagina-web-principal-76c12.iam.gserviceaccount.com
-
-GMAIL_EMAIL=hermogenesalvarado503@gmail.com
-GMAIL_APP_PASSWORD=JBSWY3DPEHPK3PXP
-PASSWORD_CHANGE_EMAIL=hermogenesalvarado503@gmail.com
+VITE_FIREBASE_API_KEY
+VITE_FIREBASE_AUTH_DOMAIN
+VITE_FIREBASE_PROJECT_ID
+VITE_FIREBASE_STORAGE_BUCKET
+VITE_FIREBASE_MESSAGING_SENDER_ID
+VITE_FIREBASE_APP_ID
+VITE_API_URL
 ```
+
+Variables privadas del backend:
+
+```
+FIREBASE_PROJECT_ID
+FIREBASE_PRIVATE_KEY_ID
+FIREBASE_PRIVATE_KEY
+FIREBASE_CLIENT_EMAIL
+GMAIL_EMAIL
+GMAIL_APP_PASSWORD
+PASSWORD_CHANGE_EMAIL
+```
+
+En `FIREBASE_PRIVATE_KEY`, conserva los saltos de línea como `\\n` al pegarla en Vercel.
 
 ### 4. Desplegar con Git
 

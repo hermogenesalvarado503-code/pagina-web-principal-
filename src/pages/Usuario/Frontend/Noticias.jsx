@@ -9,7 +9,8 @@ export default function Noticias({ t, events, goTo }) {
             {event.image_url && <img className="card-thumb" src={event.image_url} alt={event.title} />}
             <small>{formatEventDate(event)}</small>
             <h3>{event.title}</h3>
-            <strong>{event.news}</strong>
+            {event.topic && <strong>{event.topic}</strong>}
+            {(event.is_important || event.isImportant) && <strong className="important-label">Aviso importante</strong>}
             <p>{event.description}</p>
             {event.location && <small>{event.location}</small>}
           </article>

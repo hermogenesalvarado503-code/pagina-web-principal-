@@ -4,10 +4,10 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "rewrites": [
-    { "source": "/admin/:path*", "destination": "/index.html" },
-    { "source": "/portal/:path*", "destination": "/index.html" },
-    { "source": "/login", "destination": "/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/admin/:path*", "destination": "/" },
+    { "source": "/portal/:path*", "destination": "/" },
+    { "source": "/login", "destination": "/" },
+    { "source": "/((?!api/|img/|assets/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
