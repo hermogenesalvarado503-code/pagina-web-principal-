@@ -967,7 +967,7 @@ function Footer({ t, pages, goTo }) {
       </div>
       <div>
         <h4>CONTACTO</h4>
-        <p><a href="tel:+50323304037">+503 2330-4037</a><br /><br /><a href="mailto:hermogenesalvarado503@gmail.com">hermogenesalvarado503@gmail.com</a><br /><br />Lunes a viernes: 7:00 AM - 4:00 PM</p>
+        <p><a href="tel:+50375926281">+503 7592-6281</a><br /><br /><a href="mailto:hermogenesalvarado503@gmail.com">hermogenesalvarado503@gmail.com</a><br /><br />Lunes a viernes: 7:00 AM - 4:00 PM</p>
       </div>
       <p className="copyright">2026 Centro Escolar Dr. Hermogenes Alvarado. Todos los derechos reservados.</p>
     </footer>
