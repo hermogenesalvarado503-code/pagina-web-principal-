@@ -231,6 +231,43 @@ button {
   animation: scrim-in 0.22s ease both;
 }
 
+@media (min-width: 841px) {
+  .nav-toggle,
+  .nav-scrim {
+    display: none;
+  }
+
+  .nav-primary,
+  .nav-primary.open {
+    display: flex;
+    position: static;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem;
+    width: auto;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem 0.7rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    animation: none;
+  }
+
+  .nav-primary button {
+    min-height: 2.4rem;
+    padding: 0.4rem 0.9rem;
+    color: white;
+  }
+
+  .nav-primary button:hover,
+  .nav-primary button.active {
+    background: rgba(255, 255, 255, 0.16);
+    color: white;
+  }
+}
+
 [data-reveal] {
   opacity: 0;
   transform: translateY(32px) scale(0.98);
