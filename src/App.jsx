@@ -967,7 +967,7 @@ function Footer({ t, pages, goTo }) {
       </div>
       <div>
         <h4>CONTACTO</h4>
-        <p>+503 2330-4037<br /><br />hermogenesalvarado503@gmail.com<br /><br />Lunes a viernes: 7:00 AM - 4:00 PM</p>
+        <p><a href="tel:+50323304037">+503 2330-4037</a><br /><br /><a href="mailto:hermogenesalvarado503@gmail.com">hermogenesalvarado503@gmail.com</a><br /><br />Lunes a viernes: 7:00 AM - 4:00 PM</p>
       </div>
       <p className="copyright">2026 Centro Escolar Dr. Hermogenes Alvarado. Todos los derechos reservados.</p>
     </footer>
@@ -1009,13 +1009,13 @@ function FloatingButtons() {
         <span className="floating-tip">Contáctanos por Facebook</span>
         <img src="/img/Logo_de_Facebook.png" alt="" />
       </a>
-      <a href="https://wa.me/50323304037" target="_blank" rel="noreferrer" aria-label="WhatsApp" data-tip="Escríbenos por WhatsApp">
+      <a href="https://wa.me/50375926281" target="_blank" rel="noreferrer" aria-label="WhatsApp" data-tip="Escríbenos por WhatsApp">
         <span className="floating-tip">Escríbenos por WhatsApp</span>
         <img src="/img/WhatsAp.png" alt="" />
       </a>
-      <a href="hermogenesalvarado503@gmail.com" target="_blank" rel="noreferrer" aria-label="Gmail" data-tip="Escríbenos por Gmail">
+      <a href="https://mail.google.com/mail/?view=cm&fs=1&to=hermogenesalvarado503@gmail.com" target="_blank" rel="noreferrer" aria-label="Gmail" data-tip="Escríbenos por Gmail">
         <span className="floating-tip">Escríbenos por Gmail</span>
-        <img src="/img/gmail.jpeg" alt="Logo de Gmail" />
+        <img src="/img/gmail.jpeg" alt=" " />
       </a>
     </div>
   )
