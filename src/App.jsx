@@ -128,12 +128,12 @@ function App() {
 
   const t = copy[lang]
   const pages = useMemo(() => [
-    { id: 'inicio', label: t.nav.inicio, icon: '⌂' },
-    { id: 'nosotros', label: t.nav.nosotros, icon: '◌' },
-    { id: 'servicios', label: t.nav.servicios, icon: '✦' },
-    { id: 'galeria', label: t.nav.galeria, icon: '▧' },
-    { id: 'noticias', label: t.nav.noticias, icon: '✧' },
-    { id: 'contacto', label: t.nav.contacto, icon: '✉' },
+    { id: 'inicio', label: t.nav.inicio },
+    { id: 'nosotros', label: t.nav.nosotros },
+    { id: 'servicios', label: t.nav.servicios },
+    { id: 'galeria', label: t.nav.galeria },
+    { id: 'noticias', label: t.nav.noticias },
+    { id: 'contacto', label: t.nav.contacto },
   ], [t])
 
   function changeLang(nextLang) {
@@ -603,7 +603,6 @@ function Header({ t, pages, page, session, menuOpen, setMenuOpen, goTo, logout }
     <header className="site-header">
       <div className="header-main">
         <button className="brand" type="button" onClick={() => goTo('inicio')}>
-          <span className="brand-burst" aria-hidden="true">✦</span>
           <span className="brand-badge">
             <img src="/img/logo.jpeg" alt="Logo del Centro Escolar Dr. Hermogenes Alvarado" />
           </span>
@@ -614,7 +613,7 @@ function Header({ t, pages, page, session, menuOpen, setMenuOpen, goTo, logout }
         </button>
 
         <div className="header-actions">
-          <button className={`nav-toggle ${menuOpen ? 'is-open' : ''}`} type="button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
+          <button className={`nav-toggle ${menuOpen ? 'is-open' : ''}`} type="button" aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuOpen} aria-controls="site-navigation" onClick={() => setMenuOpen((open) => !open)}>
             <span />
             <span />
             <span />
@@ -623,10 +622,9 @@ function Header({ t, pages, page, session, menuOpen, setMenuOpen, goTo, logout }
       </div>
 
       {menuOpen && <button className="nav-scrim" type="button" aria-label="Cerrar menú" onClick={() => setMenuOpen(false)} />}
-      <nav className={menuOpen ? 'nav-primary open' : 'nav-primary'} aria-label="Navegación principal">
+      <nav id="site-navigation" className={menuOpen ? 'nav-primary open' : 'nav-primary'} aria-label="Navegación principal">
         {pages.map((item) => (
           <button key={item.id} className={`${page === item.id ? 'active ' : ''}nav-item-${item.id}`} type="button" onClick={() => goTo(item.id)}>
-            <span className="nav-icon" aria-hidden="true">{item.icon}</span>
             <span className="nav-label">{item.label}</span>
           </button>
         ))}
