@@ -300,6 +300,9 @@ export default function AdminDashboard() {
     })
     if (!res.ok) {
       const body = await jsonResponse(res)
+      if (res.status === 401 || res.status === 403) {
+        throw new Error('Tu sesión expiró o no tiene permisos. Cierra sesión e inicia sesión de nuevo como administrador.')
+      }
       throw new Error(body?.error || 'Error en la API')
     }
     return jsonResponse(res)
@@ -398,6 +401,7 @@ export default function AdminDashboard() {
   }
 
   async function deleteReviewItem(id) {
+    if (!window.confirm('¿Eliminar este comentario?')) return
     try {
       await request(`/api/reviews/${id}`, { method: 'DELETE' })
       setReviews((current) => current.filter((item) => item.id !== id))
