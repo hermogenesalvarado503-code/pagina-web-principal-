@@ -257,6 +257,12 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => {
+    if (!notice) return undefined
+    const timer = setTimeout(() => setNotice(''), 5000)
+    return () => clearTimeout(timer)
+  }, [notice])
+
+  useEffect(() => {
     async function loadData() {
       try {
         const [galleryRes, eventsRes, reviewsRes, messagesRes, analyticsRes, settingsRes] = await Promise.all([
@@ -304,7 +310,10 @@ export default function AdminDashboard() {
       if (res.status === 401 || res.status === 403) {
         throw new Error('Tu sesión expiró o no tiene permisos. Cierra sesión e inicia sesión de nuevo como administrador.')
       }
-      throw new Error(body?.error || 'Error en la API')
+      if (res.status === 404 || res.status >= 500) {
+        throw new Error('No se pudo completar la acción. Intenta de nuevo en unos momentos.')
+      }
+      throw new Error(body?.error && String(body.error).length < 120 ? body.error : 'Error en la API')
     }
     return jsonResponse(res)
   }
