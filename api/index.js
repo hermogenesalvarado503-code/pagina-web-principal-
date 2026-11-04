@@ -383,13 +383,14 @@ app.post('/api/reviews', async (req, res) => {
       return res.status(400).json({ error: 'Required fields missing' })
     }
 
-    const docRef = await db.collection('reviews').add({
-      name, email, role, rating: parseInt(rating), comment,
-      approved: false,
+    const review = {
+      name, email, role, rating: Math.min(5, Math.max(1, parseInt(rating) || 5)), comment,
+      approved: true,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
-    })
+    }
+    const docRef = await db.collection('reviews').add(review)
 
-    res.status(201).json({ id: docRef.id, message: 'Review submitted' })
+    res.status(201).json({ id: docRef.id, name, role, rating: review.rating, comment, approved: true, created_at: new Date().toISOString() })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

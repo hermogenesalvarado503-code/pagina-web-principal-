@@ -1,15 +1,9 @@
 import { useState } from 'react'
 import { Page } from './PageLayout'
 
-const demoReviews = [
-  { name: 'María García', role: 'Madre de familia', rating: 5, comment: 'Excelente institución. Mi hijo ha mejorado académica y socialmente.' },
-  { name: 'Juan Rodríguez', role: 'Padre de familia', rating: 5, comment: 'La disciplina es firme, pero justa, y el ambiente es sano.' },
-]
-
 export default function Nosotros({ t, reviews, onReview }) {
   const [showAllReviews, setShowAllReviews] = useState(false)
-  const validReviews = reviews.filter((review) => review?.comment && review?.name)
-  const allReviews = [...validReviews, ...demoReviews]
+  const allReviews = reviews.filter((review) => review?.comment && review?.name)
   const visibleReviews = showAllReviews ? allReviews : allReviews.slice(0, 3)
   const hasMoreReviews = allReviews.length > visibleReviews.length
 
@@ -35,6 +29,7 @@ export default function Nosotros({ t, reviews, onReview }) {
           <p>Opiniones de nuestra comunidad educativa sobre su experiencia en el Centro Escolar.</p>
         </div>
         <div className="reviews-grid">
+          {visibleReviews.length === 0 && <p>Aún no hay comentarios. ¡Sé el primero en compartir tu experiencia!</p>}
           {visibleReviews.map((review, index) => {
             const rating = Math.min(5, Math.max(0, Number(review.rating) || 0))
 

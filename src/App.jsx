@@ -105,11 +105,6 @@ const services = [
   ['Consejería estudiantil', 'Orientación para estudiantes y familias.'],
 ]
 
-const demoReviews = [
-  { name: 'Maria Garcia', role: 'Madre de familia', rating: 5, comment: 'Excelente institucion. Mi hijo ha mejorado academica y socialmente.' },
-  { name: 'Juan Rodriguez', role: 'Padre de familia', rating: 5, comment: 'La disciplina es firme pero justa, y el ambiente es sano.' },
-]
-
 function App() {
   const [lang, setLang] = useState(() => localStorage.getItem('drhga-lang') || 'es')
   const [page, setPage] = useState('inicio')
@@ -326,9 +321,9 @@ function App() {
     const form = event.currentTarget
     try {
       const created = await request('/api/reviews', { method: 'POST', body: JSON.stringify(payload) })
-      if (created?.approved || created?.comment) setReviews((current) => [created, ...current])
+      setReviews((current) => [created, ...current])
       form.reset()
-      setNotice(lang === 'es' ? 'Reseña enviada. Se publicará cuando sea aprobada.' : 'Review submitted. It will be published once approved.')
+      setNotice(lang === 'es' ? 'Gracias, tu comentario fue publicado.' : 'Thanks, your review has been published.')
     } catch {
       setNotice(lang === 'es' ? 'No se pudo enviar la reseña.' : 'Could not submit review.')
     }
