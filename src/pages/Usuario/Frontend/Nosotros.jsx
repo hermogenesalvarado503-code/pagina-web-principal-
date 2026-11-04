@@ -6,13 +6,12 @@ const demoReviews = [
   { name: 'Juan Rodríguez', role: 'Padre de familia', rating: 5, comment: 'La disciplina es firme, pero justa, y el ambiente es sano.' },
 ]
 
-export default function Nosotros({ t, reviews, session, onReview, onDeleteReview }) {
+export default function Nosotros({ t, reviews, onReview }) {
   const [showAllReviews, setShowAllReviews] = useState(false)
   const validReviews = reviews.filter((review) => review?.comment && review?.name)
   const allReviews = [...validReviews, ...demoReviews]
   const visibleReviews = showAllReviews ? allReviews : allReviews.slice(0, 3)
   const hasMoreReviews = allReviews.length > visibleReviews.length
-  const currentUserEmail = session?.user?.email?.toLowerCase?.() ?? ''
 
   return (
     <Page title={t.pages.aboutTitle} intro={t.pages.aboutIntro}>
@@ -37,8 +36,6 @@ export default function Nosotros({ t, reviews, session, onReview, onDeleteReview
         </div>
         <div className="reviews-grid">
           {visibleReviews.map((review, index) => {
-            const isOwner = !!review.email && currentUserEmail && review.email.toLowerCase() === currentUserEmail
-            const canDelete = !!review.id && !!session?.user && (session.user.role === 'admin' || isOwner)
             const rating = Math.min(5, Math.max(0, Number(review.rating) || 0))
 
             return (
@@ -49,11 +46,6 @@ export default function Nosotros({ t, reviews, session, onReview, onDeleteReview
                   <strong>{review.name}</strong>
                   <small>{review.role}</small>
                 </div>
-                {canDelete && (
-                  <button className="btn danger" type="button" onClick={() => onDeleteReview?.(review.id)}>
-                    Eliminar
-                  </button>
-                )}
               </article>
             )
           })}

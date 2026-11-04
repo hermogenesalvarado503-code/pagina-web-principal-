@@ -528,8 +528,11 @@ button {
   display: grid;
   gap: 1rem;
 }
+.reviews-grid {
+  margin-bottom: 1.5rem;
+}
 .reviews-footer {
-  margin-top: 1.2rem;
+  margin: 1.2rem 0 1.5rem;
   text-align: center;
 }
 .stats-grid {
