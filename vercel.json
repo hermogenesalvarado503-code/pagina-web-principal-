@@ -4,6 +4,7 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "rewrites": [
+    { "source": "/api/:path+", "destination": "/api/index.js" },
     { "source": "/admin/:path*", "destination": "/" },
     { "source": "/portal/:path*", "destination": "/" },
     { "source": "/login", "destination": "/" },

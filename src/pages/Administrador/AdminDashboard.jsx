@@ -962,7 +962,7 @@ export default function AdminDashboard() {
                             {'★'.repeat(item.rating)}{'☆'.repeat(5 - item.rating)}
                           </div>
                           <p>{item.comment}</p>
-                          <small>{new Date(item.created_at).toLocaleString()}</small>
+                          <small>{(item.created_at || item.createdAt) ? new Date(item.created_at || item.createdAt).toLocaleString('es-SV') : 'Sin fecha'}</small>
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
