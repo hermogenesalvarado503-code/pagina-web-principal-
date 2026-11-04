@@ -8,7 +8,8 @@ const demoReviews = [
 
 export default function Nosotros({ t, reviews, session, onReview, onDeleteReview }) {
   const [showAllReviews, setShowAllReviews] = useState(false)
-  const allReviews = [...reviews, ...demoReviews]
+  const validReviews = reviews.filter((review) => review?.comment && review?.name)
+  const allReviews = [...validReviews, ...demoReviews]
   const visibleReviews = showAllReviews ? allReviews : allReviews.slice(0, 3)
   const hasMoreReviews = allReviews.length > visibleReviews.length
   const currentUserEmail = session?.user?.email?.toLowerCase?.() ?? ''
@@ -32,16 +33,18 @@ export default function Nosotros({ t, reviews, session, onReview, onDeleteReview
         <div className="section-heading" data-reveal>
           <p className="eyebrow">Reseñas</p>
           <h2>Lo que dicen padres y estudiantes</h2>
+          <p>Opiniones de nuestra comunidad educativa sobre su experiencia en el Centro Escolar.</p>
         </div>
         <div className="reviews-grid">
           {visibleReviews.map((review, index) => {
             const isOwner = !!review.email && currentUserEmail && review.email.toLowerCase() === currentUserEmail
-            const canDelete = !!session?.user && (session.user.role === 'admin' || isOwner)
+            const canDelete = !!review.id && !!session?.user && (session.user.role === 'admin' || isOwner)
+            const rating = Math.min(5, Math.max(0, Number(review.rating) || 0))
 
             return (
-              <article className="review-card" data-reveal key={`${review.name}-${index}`}>
-                <div className="stars">{'*'.repeat(review.rating)}{'-'.repeat(5 - review.rating)}</div>
-                <p>{review.comment}</p>
+              <article className="review-card" data-reveal key={review.id || `${review.name}-${index}`}>
+                <div className="stars" aria-label={`${rating} de 5 estrellas`}>{'★'.repeat(rating)}{'☆'.repeat(5 - rating)}</div>
+                <p className="review-comment">“{review.comment}”</p>
                 <div className="review-author">
                   <strong>{review.name}</strong>
                   <small>{review.role}</small>
@@ -54,7 +57,7 @@ export default function Nosotros({ t, reviews, session, onReview, onDeleteReview
               </article>
             )
           })}
-        </div><br></br>
+        </div>
         {hasMoreReviews && (
           <div className="reviews-footer">
             <button className="btn secondary" type="button" onClick={() => setShowAllReviews((current) => !current)}>
@@ -76,6 +79,8 @@ export default function Nosotros({ t, reviews, session, onReview, onDeleteReview
             <option value="5">5 estrellas</option>
             <option value="4">4 estrellas</option>
             <option value="3">3 estrellas</option>
+            <option value="2">2 estrellas</option>
+            <option value="1">1 estrella</option>
           </select>
           <textarea name="comment" placeholder="Tu reseña" required />
           <button className="btn primary" type="submit">{t.forms.save}</button>

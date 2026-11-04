@@ -139,7 +139,7 @@ async function imageFileToDataUrl(file) {
 function replyEmailLink(message) {
   const subject = `Respuesta: ${message.subject || 'Consulta recibida'}`
   const body = `Hola ${message.name || ''},\n\nGracias por comunicarse con el Centro Escolar Dr. Hermógenes Alvarado.\n\n`
-  return `mailto:${message.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(message.email || '')}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }
 
 function whatsappLink(phone) {
@@ -277,7 +277,10 @@ export default function AdminDashboard() {
         setGallery(Array.isArray(galleryData) ? galleryData.map(serializeFirestoreValue).map(normalizeGalleryItem) : [])
         setEvents(Array.isArray(eventsData) ? eventsData.map(serializeFirestoreValue).map(normalizeEventItem) : [])
         setReviews(Array.isArray(reviewsData) ? reviewsData.map(serializeFirestoreValue) : [])
-        setMessages(Array.isArray(messagesData) ? messagesData.map(serializeFirestoreValue) : [])
+        setMessages(Array.isArray(messagesData) ? messagesData.map((item) => {
+          const message = serializeFirestoreValue(item)
+          return { ...message, created_at: message.created_at || message.createdAt, status: message.status === 'new' ? 'unread' : message.status }
+        }) : [])
         setAnalytics(normalizeAnalytics(serializeFirestoreValue(analyticsData)))
         setHeroImageDraft(settingsData.heroImageUrl || '')
       } catch (error) {
@@ -421,7 +424,7 @@ export default function AdminDashboard() {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       })
-      setMessages((current) => current.map((message) => (message.id === id ? result : message)))
+      setMessages((current) => current.map((message) => (message.id === id ? { ...message, status: result?.status || status } : message)))
       setNotice(status === 'resolved' ? 'Mensaje marcado como atendido.' : 'Mensaje marcado como nuevo.')
     } catch (error) {
       setNotice(error.message)
@@ -1292,7 +1295,7 @@ export default function AdminDashboard() {
                           <p>{message.message}</p>
                         </div>
                         <div className="message-actions">
-                          <a className="btn primary message-action-link" href={replyEmailLink(message)}>
+                          <a className="btn primary message-action-link" href={replyEmailLink(message)} target="_blank" rel="noreferrer">
                             <span className="message-action-icon" aria-hidden="true">
                               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.75A2.75 2.75 0 0 1 5.75 4h12.5A2.75 2.75 0 0 1 21 6.75v10.5A2.75 2.75 0 0 1 18.25 20H5.75A2.75 2.75 0 0 1 3 17.25V6.75Zm2.2-.25 6.8 5.1 6.8-5.1H5.2Zm13.55 2.05-6.3 4.72a1 1 0 0 1-1.3 0L5.25 8.55v8.7c0 .41.34.75.75.75h12c.41 0 .75-.34.75-.75v-8.7Z"/></svg>
                             </span>

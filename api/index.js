@@ -337,6 +337,21 @@ app.post('/api/messages', async (req, res) => {
   }
 })
 
+app.patch('/api/messages/:id', requireAdmin, async (req, res) => {
+  try {
+    const status = req.body?.status
+    if (!['unread', 'read', 'resolved', 'new'].includes(status)) {
+      return res.status(400).json({ error: 'Estado de mensaje inválido.' })
+    }
+    const ref = db.collection('messages').doc(req.params.id)
+    await ref.update({ status: status === 'new' ? 'unread' : status })
+    const doc = await ref.get()
+    res.json({ id: doc.id, ...doc.data() })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
 app.delete('/api/messages/:id', requireAdmin, async (req, res) => {
   try {
     await db.collection('messages').doc(req.params.id).delete()

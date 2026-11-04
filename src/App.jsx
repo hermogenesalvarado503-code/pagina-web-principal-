@@ -323,11 +323,12 @@ function App() {
     event.preventDefault()
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries())
     payload.rating = Number(payload.rating)
+    const form = event.currentTarget
     try {
       const created = await request('/api/reviews', { method: 'POST', body: JSON.stringify(payload) })
-      setReviews((current) => [created, ...current])
-      event.currentTarget.reset()
-      setNotice(lang === 'es' ? 'Reseña enviada.' : 'Review submitted.')
+      if (created?.approved || created?.comment) setReviews((current) => [created, ...current])
+      form.reset()
+      setNotice(lang === 'es' ? 'Reseña enviada. Se publicará cuando sea aprobada.' : 'Review submitted. It will be published once approved.')
     } catch {
       setNotice(lang === 'es' ? 'No se pudo enviar la reseña.' : 'Could not submit review.')
     }
