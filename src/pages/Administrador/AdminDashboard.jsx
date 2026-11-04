@@ -234,6 +234,7 @@ export default function AdminDashboard() {
   const [imageDraft, setImageDraft] = useState('')
   const [uploadingImage, setUploadingImage] = useState(false)
   const [notice, setNotice] = useState('')
+  const [pendingDelete, setPendingDelete] = useState(null)
   const [loading, setLoading] = useState(true)
   const [analyticsView, setAnalyticsView] = useState('resumen')
   const [analytics, setAnalytics] = useState(defaultAnalytics)
@@ -401,7 +402,7 @@ export default function AdminDashboard() {
   }
 
   async function deleteReviewItem(id) {
-    if (!window.confirm('¿Eliminar este comentario?')) return
+    setPendingDelete(null)
     try {
       await request(`/api/reviews/${id}`, { method: 'DELETE' })
       setReviews((current) => current.filter((item) => item.id !== id))
@@ -567,6 +568,19 @@ export default function AdminDashboard() {
 
   return (
     <AdminLayout activeSection={activeSection} onNavigate={setActiveSection}>
+      {pendingDelete && (
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title" onClick={() => setPendingDelete(null)}>
+          <div className="confirm-panel" onClick={(event) => event.stopPropagation()}>
+            <h3 id="confirm-title">Eliminar comentario</h3>
+            <p>¿Seguro que deseas eliminar el comentario de <strong>{pendingDelete.name}</strong>? Esta acción no se puede deshacer.</p>
+            <blockquote>{pendingDelete.comment}</blockquote>
+            <div className="confirm-actions">
+              <button className="btn secondary" type="button" onClick={() => setPendingDelete(null)}>Cancelar</button>
+              <button className="danger" type="button" onClick={() => deleteReviewItem(pendingDelete.id)}>Sí, eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
       <section style={{ padding: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
@@ -952,7 +966,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button className="danger" type="button" onClick={() => deleteReviewItem(item.id)}>
+                        <button className="danger" type="button" onClick={() => setPendingDelete(item)}>
                           Eliminar
                         </button>
                       </div>

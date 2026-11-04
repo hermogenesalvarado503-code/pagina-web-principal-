@@ -20,6 +20,22 @@ export default function AdminLayout({ children, activeSection, onNavigate }) {
     setMenuOpen(false)
   }
 
+  async function logout() {
+    try {
+      const token = localStorage.getItem('drhga-token')
+      await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+    } catch {
+      // se limpia la sesión local de todos modos
+    }
+    localStorage.removeItem('drhga-session')
+    localStorage.removeItem('drhga-token')
+    window.location.assign('/login')
+  }
+
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
@@ -44,6 +60,9 @@ export default function AdminLayout({ children, activeSection, onNavigate }) {
             </button>
           ))}
         </nav>
+        <button className="admin-logout" type="button" onClick={logout}>
+          <span aria-hidden="true">⎋</span> Cerrar sesión
+        </button>
       </aside>
       <main className="admin-main">{children}</main>
     </div>

@@ -32,3 +32,12 @@
 }
 @media (max-width:560px){.admin-sidebar{padding:.7rem}.admin-sidebar nav{grid-template-columns:1fr}.admin-main{padding:.7rem}.dashboard-header-panel{align-items:flex-start}.dashboard-tab-group{width:100%}.dashboard-tab-group button{flex:1;padding:.5rem .25rem;font-size:.72rem}.bars-chart{gap:.3rem}.hour-row{grid-template-columns:32px 1fr 28px}.dashboard-stat strong{font-size:1.45rem}.section-heading h3{font-size:1.15rem}}
 @keyframes admin-menu-in{from{opacity:0;transform:translateY(-.4rem)}to{opacity:1;transform:translateY(0)}}
+
+.admin-logout{display:flex;align-items:center;gap:.6rem;width:100%;margin-top:1rem;padding:.7rem .75rem;border:1px solid rgba(248,113,113,.4);border-radius:12px;background:rgba(220,38,38,.15);color:#fecaca;font-size:.82rem;font-weight:800;cursor:pointer}
+.admin-logout:hover{background:rgba(220,38,38,.3);color:#fff}
+.confirm-overlay{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:1rem;background:rgba(15,23,42,.55)}
+.confirm-panel{width:min(100%,28rem);padding:1.5rem;border-radius:14px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.35);display:grid;gap:.75rem}
+.confirm-panel h3{margin:0;color:#b91c1c}
+.confirm-panel p{margin:0;color:#334155}
+.confirm-panel blockquote{margin:0;padding:.6rem .8rem;border-left:4px solid #cbd5e1;background:#f8fafc;color:#475569;font-style:italic;max-height:7rem;overflow:auto;overflow-wrap:anywhere}
+.confirm-actions{display:flex;justify-content:flex-end;gap:.6rem;flex-wrap:wrap}
