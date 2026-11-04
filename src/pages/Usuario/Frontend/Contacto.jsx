@@ -24,7 +24,7 @@ export default function Contacto({ t, onSubmit }) {
          
           <p><strong>Ubicación:</strong> Avenida El Progreso No. 2, Barrio San Juan, Santiago Nonualco.</p>
           <p>          <strong>Teléfono:</strong> <a href="tel:+50375926281">+503 7592-6281</a></p>
-                    <p><strong>Correo:</strong> <a href="mailto:escuela.342@clases.edu.sv">escuela.342@clases.edu.sv</a></p>
+                    <p><strong>Correo:</strong> <a href="mailto:hermogenesalvarado503@gmail.com">hermogenesalvarado503@gmail.com</a></p>
           <p><strong>Horario:</strong> Lunes a viernes: 7:00 AM - 4:00 PM</p>
           <div className="map-frame-wrapper">
             <strong>Estamos ubicados en:</strong>

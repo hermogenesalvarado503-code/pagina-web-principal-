@@ -154,7 +154,7 @@ export default function Inicio({ t, goTo, heroImage, events = [] }) {
       <section className="hero-info">
         <span>📍 Avenida El Progreso No. 2, Barrio San Juan, Santiago Nonualco</span>
         <span>📞 +503 7592-6281</span>
-        <span>✉️ escuela.342@clases.edu.sv</span>
+        <span>✉️ hermogenesalvarado503@gmail.com</span>
       </section>
 
       <section className="section intro">
