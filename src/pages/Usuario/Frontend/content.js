@@ -195,7 +195,7 @@ export const dashboardContent = {
 export const loginContent = {
   es: {
     title: 'Acceso al sistema',
-    text: 'Ingresa como administrador, usuario, estudiante o docente.',
+    text: 'Ingresa como administrador',
     password: 'Contraseña',
     submit: 'Iniciar sesión',
   },
