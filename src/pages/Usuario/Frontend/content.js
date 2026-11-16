@@ -209,10 +209,10 @@ export const loginContent = {
 
 export const servicesContent = {
   es: [
-    ['Educación académica', 'Programas educativos rigurosos desde kínder hasta noveno grado.'],
+    ['Educación académica', 'Programas educativos rigurosos desde kínder hasta noveno grado, enfocados en el desarrollo de infantes, niños, jovenes, con enseñanzas en las diferentes materias otorgadas por el MINED.'],
     ['Actividades deportivas', 'Deporte y educación física para fomentar el trabajo en equipo.'],
-    ['Artes y cultura', 'Música, arte y participación cívica.'],
-    ['Consejería estudiantil', 'Orientación para estudiantes y familias.'],
+    ['Artes', 'Música, danzas forcloricas, feria de logros, entre otras actividades afines.'],
+    ['Consejería estudiantil', 'Orientación para estudiantes y familias, con ayuda de reuniones trimestrales o similares.'],
   ],
   en: [
     ['Academic education', 'Rigorous educational programs from kindergarten to ninth grade.'],
